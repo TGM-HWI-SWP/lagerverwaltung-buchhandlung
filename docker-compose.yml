@@ -25,7 +25,8 @@ services:
     depends_on:
       - db
     command: >
-      sh -c "pip install --no-cache-dir -e . && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+      sh -c "pip install --no-cache-dir -e . &&
+      uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     ports:
       - "8000:8000"
 
