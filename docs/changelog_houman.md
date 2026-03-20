@@ -1,15 +1,13 @@
 # Changelog - [Name]
 
-Persönliches Changelog für [Name], Rolle: [Rollenbezeichnung]
+Persönliches Changelog für [Houman], Rolle: [Businesslogic]
 
 ---
 
 ## [v0.1] - 2025-01-20
 
 ### Implementiert
-- [Feature/Fix 1]
-- [Feature/Fix 2]
-- [Feature/Fix 3]
+- database 
 
 ### Tests geschrieben
 - test_[name 1]
