@@ -17,9 +17,10 @@ Persönliches Changelog für [Houman], Rolle: [Businesslogic]
 
 ### Commits
 ```
+- d4ec87ca2ce9ce2e29a86d28c409dca47bcc0841 Feat: [db.sql erschaffen]
 - ec3a66c97ca07dbdfd909afec396e363c6934dfd Feat: [neue datenbank angeschafft]
-- f1c5e2ffcd29b8812d88405f016cbef99bbbe708 Test: [changelog_houman updated]
-- d4ec87ca2ce9ce2e29a86d28c409dca47bcc0841 Docs: [db.sql erschaffen]
+- f1c5e2ffcd29b8812d88405f016cbef99bbbe708 Docs: [changelog_houman updated]
+- 12aafe047993a0082bb2cdb6f84862c2ea02969b Feat: [crud für inventory.py und books.py]
 ```
 
 ### Mergekonflikt(e)
