@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Numeric
+from sqlalchemy import Column, Integer, String, Float, Text, ForeignKey
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -7,19 +7,26 @@ Base = declarative_base()
 class Book(Base):
     __tablename__ = "books"
 
-    id = Column(Integer, primary_key=True, index=True)
-    isbn = Column(String(32), unique=True, index=True, nullable=False)
-    title = Column(String(255), nullable=False)
-    author = Column(String(255), nullable=False)
-    publisher = Column(String(255), nullable=True)
-    price = Column(Numeric(10, 2), nullable=False)
-
-
-class InventoryItem(Base):
-    __tablename__ = "inventory_items"
-
-    id = Column(Integer, primary_key=True, index=True)
-    book_id = Column(Integer, index=True, nullable=False)
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=False)
+    price = Column(Float, nullable=False)
     quantity = Column(Integer, nullable=False, default=0)
-    location = Column(String(255), nullable=True)
+    sku = Column(String, default="")
+    category = Column(String, default="")
+    created_at = Column(String, nullable=False)
+    updated_at = Column(String, nullable=False)
+    notes = Column(Text, nullable=True)
 
+
+class Movement(Base):
+    __tablename__ = "movements"
+
+    id = Column(String, primary_key=True)
+    product_id = Column(String, ForeignKey("books.id"), nullable=False)
+    product_name = Column(String, nullable=False)
+    quantity_change = Column(Integer, nullable=False)
+    movement_type = Column(String, nullable=False)  # IN, OUT, CORRECTION
+    reason = Column(Text, nullable=True)
+    timestamp = Column(String, nullable=False)
+    performed_by = Column(String, nullable=False, default="system")

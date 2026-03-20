@@ -1,7 +1,7 @@
 
 
 -- Produkte-Tabelle
-CREATE TABLE IF NOT EXISTS products (
+CREATE TABLE IF NOT EXISTS books (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT NOT NULL,
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS movements (
 -- Dummy-Daten: Produkte (Bücher)
 -- ============================================
 
-INSERT INTO products (id, name, description, price, quantity, sku, category, created_at, updated_at, notes) VALUES
+INSERT INTO books (id, name, description, price, quantity, sku, category, created_at, updated_at, notes) VALUES
 ('B001', 'Der Herr der Ringe', 'Fantasy-Epos von J.R.R. Tolkien', 29.99, 15, 'ISBN-978-3-608-93981-2', 'Fantasy', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
 ('B002', 'Harry Potter und der Stein der Weisen', 'Erster Band der Harry-Potter-Reihe von J.K. Rowling', 14.99, 25, 'ISBN-978-3-551-35401-3', 'Fantasy', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
 ('B003', '1984', 'Dystopischer Roman von George Orwell', 12.99, 10, 'ISBN-978-3-548-23410-0', 'Dystopie', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),

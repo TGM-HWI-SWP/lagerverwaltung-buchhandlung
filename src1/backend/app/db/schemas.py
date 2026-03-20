@@ -1,31 +1,31 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
-class BookBase(BaseModel):
-    isbn: str = Field(..., max_length=32)
-    title: str = Field(..., max_length=255)
-    author: str = Field(..., max_length=255)
-    publisher: str | None = Field(default=None, max_length=255)
+class BookSchema(BaseModel):
+    id: str
+    name: str
+    description: str
     price: float
-
-
-class BookCreate(BookBase):
-    pass
-
-
-class BookRead(BookBase):
-    id: int
+    quantity: int = 0
+    sku: str = ""
+    category: str = ""
+    created_at: str | None = None
+    updated_at: str | None = None
+    notes: str | None = None
 
     class Config:
         from_attributes = True
 
 
-class InventoryItemRead(BaseModel):
-    id: int
-    book_id: int
-    quantity: int
-    location: str | None = None
+class MovementSchema(BaseModel):
+    id: str | None = None
+    product_id: str
+    product_name: str = ""
+    quantity_change: int
+    movement_type: str  # IN, OUT, CORRECTION
+    reason: str | None = None
+    timestamp: str | None = None
+    performed_by: str = "system"
 
     class Config:
         from_attributes = True
-
