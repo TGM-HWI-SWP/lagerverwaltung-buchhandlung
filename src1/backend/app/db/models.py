@@ -23,8 +23,8 @@ class Movement(Base):
     __tablename__ = "movements"
 
     id = Column(String, primary_key=True)
-    product_id = Column(String, ForeignKey("books.id"), nullable=False)
-    product_name = Column(String, nullable=False)
+    book_id = Column(String, ForeignKey("books.id"), nullable=False)
+    book_name = Column(String, nullable=False)
     quantity_change = Column(Integer, nullable=False)
     movement_type = Column(String, nullable=False)  # IN, OUT, CORRECTION
     reason = Column(Text, nullable=True)
