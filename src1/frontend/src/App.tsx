@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
   Sun,
   Moon,
@@ -128,6 +129,7 @@ export default function Dashboard() {
                 books={books}
                 loading={loadingBooks}
                 error={bookError}
+                dark={dark}
               />
             )}
             {page === "reports" && <ReportsPage card={card} />}
@@ -181,12 +183,22 @@ function InventoryPage({
   books,
   loading,
   error,
+  dark,
 }: {
   card: string;
   books: Book[];
   loading: boolean;
   error: string | null;
+  dark: boolean;
 }) {
+  const inputClass = dark
+    ? "w-80 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder:text-gray-400"
+    : "w-80 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500";
+
+  const mutedText = dark ? "text-gray-400" : "text-gray-500";
+  const tableBorder = dark ? "border-gray-800" : "border-gray-200";
+  const tableHeadText = dark ? "text-gray-400" : "text-gray-500";
+
   return (
     <div className="space-y-6">
       <Card className={card}>
@@ -196,13 +208,13 @@ function InventoryPage({
           <div className="mb-4 flex flex-wrap gap-3">
             <input
               placeholder="Suche nach Titel oder Autor..."
-              className="w-80 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder:text-gray-400"
+              className={inputClass}
             />
             <Button>Suche</Button>
             <Button>Neues Buch</Button>
           </div>
 
-          {loading && <p className="text-sm text-gray-400">Lade Bücher…</p>}
+          {loading && <p className={`text-sm ${mutedText}`}>Lade Bücher…</p>}
           {error && (
             <p className="text-sm text-red-400">
               Fehler beim Laden der Bücher: {error}
@@ -212,7 +224,7 @@ function InventoryPage({
           {!loading && !error && (
             <table className="mt-2 w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-gray-800 text-xs uppercase text-gray-400">
+                <tr className={`border-b ${tableBorder} text-xs uppercase ${tableHeadText}`}>
                   <th className="py-2">Titel</th>
                   <th>Autor</th>
                   <th>Preis</th>
@@ -223,7 +235,7 @@ function InventoryPage({
               <tbody>
                 {books.length === 0 && (
                   <tr>
-                    <td className="py-4 text-gray-400" colSpan={4}>
+                    <td className={`py-4 ${mutedText}`} colSpan={4}>
                       Keine Bücher vorhanden.
                     </td>
                   </tr>
@@ -231,7 +243,7 @@ function InventoryPage({
                 {books.map((book) => (
                   <tr
                     key={book.id}
-                    className="border-b border-gray-800 last:border-b-0"
+                    className={`border-b ${tableBorder} last:border-b-0`}
                   >
                     <td className="py-2">{book.title}</td>
                     <td>{book.author}</td>
@@ -297,7 +309,7 @@ function MenuButton({
   setPage,
   dark,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   value: PageKey;
   page: PageKey;
