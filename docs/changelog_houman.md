@@ -13,7 +13,7 @@ Persönliches Changelog für [Houman], Rolle: [Businesslogic]
 
 ### Tests geschrieben
 - test_[name 1]
-- test_[name 2]
+- test_[datenbank]
 
 ### Commits
 ```
@@ -28,18 +28,19 @@ Persönliches Changelog für [Houman], Rolle: [Businesslogic]
 
 ---
 
-## [v0.2] - [Datum]
+## [v0.2] - [27.03.2026]
 
 ### Implementiert
-- [Feature/Fix 1]
+- main.py
 - [Feature/Fix 2]
 
 ### Tests geschrieben
-- test_[name 1]
+- 
 
 ### Commits
 ```
-- jkl3456 Feat: [Beschreibung]
+- 5747bbfdfa0180aeff598281ec52012f6d7e98d4 Feat: [main.py logic + kommentare]
+- 0cef1d0a5aa034ac50318f79e6bcab5668cdcaab Feat: [Merge branch 'Businesslogic-Houman']
 ```
 
 ### Mergekonflikt(e)
