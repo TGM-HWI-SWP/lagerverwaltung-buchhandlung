@@ -5,6 +5,10 @@ import path from "node:path";
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  optimizeDeps: {
+    // Work around broken third-party sourcemap in container environment.
+    exclude: ["lucide-react"],
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),

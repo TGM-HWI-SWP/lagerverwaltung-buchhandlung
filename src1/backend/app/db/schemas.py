@@ -2,8 +2,9 @@ from pydantic import BaseModel
 
 
 class BookSchema(BaseModel):
-    id: str
+    id: str | None = None
     name: str
+    author: str = ""
     description: str
     price: float
     quantity: int = 0
