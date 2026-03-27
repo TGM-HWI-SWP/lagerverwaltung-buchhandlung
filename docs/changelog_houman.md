@@ -1,4 +1,4 @@
-# Changelog - [Name]
+# Changelog - [Houman]
 
 Persönliches Changelog für [Houman], Rolle: [Businesslogic]
 
@@ -8,6 +8,8 @@ Persönliches Changelog für [Houman], Rolle: [Businesslogic]
 
 ### Implementiert
 - database 
+- crud methods
+- Datenbankmodell-Datei
 
 ### Tests geschrieben
 - test_[name 1]
@@ -15,9 +17,10 @@ Persönliches Changelog für [Houman], Rolle: [Businesslogic]
 
 ### Commits
 ```
-- abc1234 Feat: [Beschreibung]
-- def5678 Test: [Beschreibung]
-- ghi9012 Docs: [Beschreibung]
+- d4ec87ca2ce9ce2e29a86d28c409dca47bcc0841 Feat: [db.sql erschaffen]
+- ec3a66c97ca07dbdfd909afec396e363c6934dfd Feat: [neue datenbank angeschafft]
+- f1c5e2ffcd29b8812d88405f016cbef99bbbe708 Docs: [changelog_houman updated]
+- 12aafe047993a0082bb2cdb6f84862c2ea02969b Feat: [crud für inventory.py und books.py]
 ```
 
 ### Mergekonflikt(e)

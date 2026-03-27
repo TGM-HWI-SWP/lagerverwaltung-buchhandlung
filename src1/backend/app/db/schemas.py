@@ -19,8 +19,8 @@ class BookSchema(BaseModel):
 
 class MovementSchema(BaseModel):
     id: str | None = None
-    product_id: str
-    product_name: str = ""
+    book_id: str
+    book_name: str = ""
     quantity_change: int
     movement_type: str  # IN, OUT, CORRECTION
     reason: str | None = None

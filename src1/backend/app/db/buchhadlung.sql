@@ -17,14 +17,14 @@ CREATE TABLE IF NOT EXISTS books (
 -- Lagerbewegungen-Tabelle
 CREATE TABLE IF NOT EXISTS movements (
     id TEXT PRIMARY KEY,
-    product_id TEXT NOT NULL,
-    product_name TEXT NOT NULL,
+    book_id TEXT NOT NULL,
+    book_name TEXT NOT NULL,
     quantity_change INTEGER NOT NULL,
     movement_type TEXT NOT NULL CHECK (movement_type IN ('IN', 'OUT', 'CORRECTION')),
     reason TEXT,
     timestamp TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     performed_by TEXT NOT NULL DEFAULT 'system',
-    FOREIGN KEY (product_id) REFERENCES products(id)
+    FOREIGN KEY (book_id) REFERENCES books(id)
 );
 
 -- ============================================
@@ -47,7 +47,7 @@ INSERT INTO books (id, name, description, price, quantity, sku, category, create
 -- Dummy-Daten: Lagerbewegungen
 -- ============================================
 
-INSERT INTO movements (id, product_id, product_name, quantity_change, movement_type, reason, timestamp, performed_by) VALUES
+INSERT INTO movements (id, book_id, book_name, quantity_change, movement_type, reason, timestamp, performed_by) VALUES
 ('M001', 'B001', 'Der Herr der Ringe', 20, 'IN', 'Erstlieferung', datetime('now', '-7 days', 'localtime'), 'David'),
 ('M002', 'B002', 'Harry Potter und der Stein der Weisen', 30, 'IN', 'Erstlieferung', datetime('now', '-7 days', 'localtime'), 'David'),
 ('M003', 'B003', '1984', 15, 'IN', 'Erstlieferung', datetime('now', '-6 days', 'localtime'), 'David'),
