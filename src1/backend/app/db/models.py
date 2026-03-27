@@ -9,6 +9,7 @@ class Book(Base):
 
     id = Column(String, primary_key=True)
     name = Column(String, nullable=False)
+    author = Column(String, nullable=False, default="")
     description = Column(Text, nullable=False)
     price = Column(Float, nullable=False)
     quantity = Column(Integer, nullable=False, default=0)
