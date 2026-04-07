@@ -31,17 +31,17 @@ CREATE TABLE IF NOT EXISTS movements (
 -- Dummy-Daten: Produkte (Bücher)
 -- ============================================
 
-INSERT INTO books (id, name, description, price, quantity, sku, category, created_at, updated_at, notes) VALUES
-('B001', 'Der Herr der Ringe', 'Fantasy-Epos von J.R.R. Tolkien', 29.99, 15, 'ISBN-978-3-608-93981-2', 'Fantasy', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
-('B002', 'Harry Potter und der Stein der Weisen', 'Erster Band der Harry-Potter-Reihe von J.K. Rowling', 14.99, 25, 'ISBN-978-3-551-35401-3', 'Fantasy', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
-('B003', '1984', 'Dystopischer Roman von George Orwell', 12.99, 10, 'ISBN-978-3-548-23410-0', 'Dystopie', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
-('B004', 'Die Verwandlung', 'Erzählung von Franz Kafka', 8.50, 7, 'ISBN-978-3-15-009900-1', 'Klassiker', datetime('now', 'localtime'), datetime('now', 'localtime'), 'Schulklassiker'),
-('B005', 'Faust I', 'Tragödie von Johann Wolfgang von Goethe', 6.99, 20, 'ISBN-978-3-15-000001-5', 'Klassiker', datetime('now', 'localtime'), datetime('now', 'localtime'), 'Pflichtlektüre'),
-('B006', 'Der kleine Prinz', 'Erzählung von Antoine de Saint-Exupéry', 9.99, 30, 'ISBN-978-3-7306-0816-5', 'Kinderbuch', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
-('B007', 'Sapiens: Eine kurze Geschichte der Menschheit', 'Sachbuch von Yuval Noah Harari', 16.99, 12, 'ISBN-978-3-421-04595-9', 'Sachbuch', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
-('B008', 'Clean Code', 'Handbuch für agile Software-Entwicklung von Robert C. Martin', 34.99, 5, 'ISBN-978-0-13-235088-4', 'Fachbuch', datetime('now', 'localtime'), datetime('now', 'localtime'), 'Beliebtes IT-Buch'),
-('B009', 'Das Parfum', 'Roman von Patrick Süskind', 11.99, 8, 'ISBN-978-3-257-22800-7', 'Roman', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
-('B010', 'Die unendliche Geschichte', 'Fantasyroman von Michael Ende', 13.50, 18, 'ISBN-978-3-522-20260-9', 'Fantasy', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL);
+INSERT INTO books (id, name, author, description, price, quantity, sku, category, created_at, updated_at, notes) VALUES
+('B001', 'Der Herr der Ringe', 'J.R.R. Tolkien', 'Fantasy-Epos von J.R.R. Tolkien', 29.99, 15, 'ISBN-978-3-608-93981-2', 'Fantasy', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
+('B002', 'Harry Potter und der Stein der Weisen', 'J.K. Rowling', 'Erster Band der Harry-Potter-Reihe von J.K. Rowling', 14.99, 25, 'ISBN-978-3-551-35401-3', 'Fantasy', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
+('B003', '1984', 'George Orwell', 'Dystopischer Roman von George Orwell', 12.99, 10, 'ISBN-978-3-548-23410-0', 'Dystopie', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
+('B004', 'Die Verwandlung', 'Franz Kafka', 'Erzählung von Franz Kafka', 8.50, 7, 'ISBN-978-3-15-009900-1', 'Klassiker', datetime('now', 'localtime'), datetime('now', 'localtime'), 'Schulklassiker'),
+('B005', 'Faust I', 'Johann Wolfgang von Goethe', 'Tragödie von Johann Wolfgang von Goethe', 6.99, 20, 'ISBN-978-3-15-000001-5', 'Klassiker', datetime('now', 'localtime'), datetime('now', 'localtime'), 'Pflichtlektüre'),
+('B006', 'Der kleine Prinz', 'Antoine de Saint-Exupéry', 'Erzählung von Antoine de Saint-Exupéry', 9.99, 30, 'ISBN-978-3-7306-0816-5', 'Kinderbuch', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
+('B007', 'Sapiens: Eine kurze Geschichte der Menschheit', 'Yuval Noah Harari', 'Sachbuch von Yuval Noah Harari', 16.99, 12, 'ISBN-978-3-421-04595-9', 'Sachbuch', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
+('B008', 'Clean Code', 'Robert C. Martin', 'Handbuch für agile Software-Entwicklung von Robert C. Martin', 34.99, 5, 'ISBN-978-0-13-235088-4', 'Fachbuch', datetime('now', 'localtime'), datetime('now', 'localtime'), 'Beliebtes IT-Buch'),
+('B009', 'Das Parfum', 'Patrick Süskind', 'Roman von Patrick Süskind', 11.99, 8, 'ISBN-978-3-257-22800-7', 'Roman', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
+('B010', 'Die unendliche Geschichte', 'Michael Ende', 'Fantasyroman von Michael Ende', 13.50, 18, 'ISBN-978-3-522-20260-9', 'Fantasy', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL);
 
 -- ============================================
 -- Dummy-Daten: Lagerbewegungen

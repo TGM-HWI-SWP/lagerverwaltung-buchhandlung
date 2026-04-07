@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi import FastAPI, Depends, HTTPException                             # FastAPI-Framework
 from fastapi.middleware.cors import CORSMiddleware                              # CORS-Middleware
 from sqlalchemy.orm import Session                                              # DB-Session
@@ -13,6 +15,26 @@ from app.api import books, inventory                                            
 
 
 Base.metadata.create_all(bind=engine)                                           # Tabellen erstellen
+
+
+def _seed_database():
+    """Fügt Testdaten ein, wenn die Datenbank leer ist."""
+    sql_file = Path(__file__).parent / "db" / "buchhadlung.sql"
+    if not sql_file.exists():
+        return
+    with engine.connect() as conn:
+        book_count = conn.execute(text("SELECT COUNT(*) FROM books")).scalar()
+        if book_count and book_count > 0:
+            return
+        sql = sql_file.read_text(encoding="utf-8")
+        for statement in sql.split(";"):
+            stmt = statement.strip()
+            if stmt:
+                conn.execute(text(stmt))
+        conn.commit()
+
+
+_seed_database()
 
 
 def _ensure_sqlite_schema():
