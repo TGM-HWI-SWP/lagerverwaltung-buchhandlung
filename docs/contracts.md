@@ -2,228 +2,104 @@
 
 ## Übersicht
 
-Diese Datei dokumentiert alle externen Schnittstellen des Projekts. Sie wird von Rolle 1 (Contract Owner) gepflegt und aktualisiert bei jeder Änderung.
+Diese Datei dokumentiert die **Backend-Contracts** (Ports/Interfaces) der Buchhandlungsverwaltung.
+Sie ist die Referenz dafür, wie die Service-Schicht mit Persistenz/Integrationen spricht – unabhängig
+von konkreten Implementierungen (Adapters).
+
+Code-Quelle: `src1/backend/app/contracts/`
 
 ---
 
-## 1. RepositoryPort
+## 1. BookRepository (Port)
 
-**Verantwortlich:** Rolle 2 (Businesslogik)
+**Ort:** `app/contracts/repositories.py`
 
-### Beschreibung
-Abstrakte Schnittstelle für Datenpersistenz. Ermöglicht den Austausch zwischen verschiedenen Speicheradaptern (In-Memory, SQLite, JSON, etc.)
+### Verantwortung
+CRUD-Zugriffe auf Bücher (Persistenz-agnostisch).
 
-### Methoden
+### Methoden (Signaturen)
 
-#### `save_product(product: Product) -> None`
-Speichert ein Produkt.
+- `list() -> list[Book]`
+- `get(book_id: str) -> Book | None`
+- `create(book: BookSchema) -> Book`
+- `update(book_id: str, book: BookSchema) -> Book | None`
+- `delete(book_id: str) -> bool`
 
-**Parameter:**
-- `product`: Product-Instanz
-
-**Exceptions:**
-- Keine
-
-**Implementierungen:**
-- `InMemoryRepository` (v0.1)
-
-#### `load_product(product_id: str) -> Optional[Product]`
-Lädt ein einzelnes Produkt.
-
-**Parameter:**
-- `product_id`: Eindeutige Produkt-ID
-
-**Return:**
-- `Product` oder `None` falls nicht gefunden
-
-**Implementierungen:**
-- `InMemoryRepository` (v0.1)
-
-#### `load_all_products() -> Dict[str, Product]`
-Lädt alle Produkte.
-
-**Return:**
-- Dictionary mit Product-IDs als Keys
-
-**Implementierungen:**
-- `InMemoryRepository` (v0.1)
-
-#### `delete_product(product_id: str) -> None`
-Löscht ein Produkt.
-
-**Parameter:**
-- `product_id`: Eindeutige Produkt-ID
-
-**Exceptions:**
-- Keine (ignoriert unbekannte IDs)
-
-**Implementierungen:**
-- `InMemoryRepository` (v0.1)
-
-#### `save_movement(movement: Movement) -> None`
-Speichert eine Lagerbewegung.
-
-**Parameter:**
-- `movement`: Movement-Instanz
-
-**Implementierungen:**
-- `InMemoryRepository` (v0.1)
-
-#### `load_movements() -> List[Movement]`
-Lädt alle Lagerbewegungen.
-
-**Return:**
-- Liste von Movement-Objekten
-
-**Implementierungen:**
-- `InMemoryRepository` (v0.1)
+### Referenz-Implementierung
+- `SqlAlchemyBookRepository` (`app/adapters/sqlalchemy_repositories.py`)
 
 ---
 
-## 2. ReportPort
+## 2. MovementRepository (Port)
 
-**Verantwortlich:** Rolle 3 (Reports & Qualität)
+**Ort:** `app/contracts/repositories.py`
 
-### Beschreibung
-Abstrakte Schnittstelle für Report-Generierung.
+### Verantwortung
+Persistenz von Lagerbewegungen (Movements).
 
-### Methoden
+### Methoden (Signaturen)
 
-#### `generate_inventory_report() -> str`
-Generiert einen Lagerbestandsbericht.
+- `list() -> list[Movement]`
+- `get(movement_id: str) -> Movement | None`
+- `create(movement: MovementSchema) -> Movement`
+- `update(movement_id: str, movement: MovementSchema) -> Movement | None`
+- `delete(movement_id: str) -> bool`
 
-**Return:**
-- Formatierter String-Bericht
-
-**Implementierungen:**
-- `ConsoleReportAdapter` (v0.1)
-
-#### `generate_movement_report() -> str`
-Generiert ein Bewegungsprotokoll.
-
-**Return:**
-- Formatierter String-Bericht
-
-**Implementierungen:**
-- `ConsoleReportAdapter` (v0.1)
+### Referenz-Implementierung
+- `SqlAlchemyMovementRepository` (`app/adapters/sqlalchemy_repositories.py`)
 
 ---
 
-## 3. WarehouseService
+## 3. Services (Use-Case Contracts)
 
-**Verantwortlich:** Rolle 2 (Businesslogik)
+Services sind keine “Ports” im strengen Sinn, aber die **stabile API** innerhalb des Backends.
 
-### Beschreibung
-Service-Klasse für zentrale Lagerverwaltungslogik.
+### BooksService
 
-### Methoden
+**Ort:** `app/services/books.py`
 
-#### `create_product(...) -> Product`
-Erstellt ein neues Produkt.
+- `list_books()`
+- `get_book(book_id)`
+- `create_book(book)`
+- `update_book(book_id, book)`
+- `delete_book(book_id)`
 
-**Parameter:**
-- `product_id: str` - Eindeutige ID
-- `name: str` - Produktname
-- `description: str` - Beschreibung
-- `price: float` - Preis
-- `category: str` - Kategorie (optional)
-- `initial_quantity: int` - Anfangsbestand
+### InventoryService
 
-**Return:**
-- Neue Product-Instanz
+**Ort:** `app/services/inventory.py`
 
-**Exceptions:**
-- `ValueError`: Bei ungültigen Eingaben
+#### `create_movement(movement: MovementSchema) -> Movement`
 
-#### `add_to_stock(product_id: str, quantity: int, reason: str, user: str) -> None`
-Erhöht den Bestand.
+**Regeln/Validierung:**
+- `movement_type` muss in `{IN, OUT, CORRECTION}` sein (case-insensitive)
+- OUT führt zu negativer Delta-Menge
+- Bestand darf nicht negativ werden
+- Beim Anlegen einer Bewegung wird der zugehörige `Book.quantity` atomar angepasst
 
-**Parameter:**
-- `product_id: str`
-- `quantity: int` - Menge
-- `reason: str` - Grund (optional)
-- `user: str` - Benutzer (default: "system")
-
-**Exceptions:**
-- `ValueError`: Wenn Produkt nicht existiert
-
-#### `remove_from_stock(product_id: str, quantity: int, reason: str, user: str) -> None`
-Verringert den Bestand.
-
-**Parameter:**
-- `product_id: str`
-- `quantity: int` - Menge
-- `reason: str` - Grund (optional)
-- `user: str` - Benutzer (default: "system")
-
-**Exceptions:**
-- `ValueError`: Wenn Bestand unzureichend oder Produkt nicht existiert
-
-#### `get_product(product_id: str) -> Optional[Product]`
-Ruft ein einzelnes Produkt ab.
-
-**Return:**
-- Product oder None
-
-#### `get_all_products() -> Dict[str, Product]`
-Ruft alle Produkte ab.
-
-**Return:**
-- Dictionary mit allen Produkten
-
-#### `get_movements() -> List[Movement]`
-Ruft alle Lagerbewegungen ab.
-
-**Return:**
-- Liste aller Movements
-
-#### `get_total_inventory_value() -> float`
-Berechnet den Gesamtwert des Lagers.
-
-**Return:**
-- Wert in Euro
+**Wichtig:** `update_movement` / `delete_movement` passen aktuell den Bestand **nicht** rückwirkend an.
+Wenn das fachlich benötigt ist, wird ein “compensating movements” Ansatz empfohlen.
 
 ---
 
-## 4. Domain Models
+## 4. Datenmodelle (DB + API)
 
-### Product
+### SQLAlchemy Models (DB)
+**Ort:** `src1/backend/app/db/models.py`
 
-**Attribute:**
-- `id: str` - Eindeutige ID
-- `name: str` - Produktname
-- `description: str` - Beschreibung
-- `price: float` - Preis pro Einheit
-- `quantity: int` - Bestand
-- `sku: str` - Stock Keeping Unit
-- `category: str` - Kategorie
-- `created_at: datetime` - Erstellungsdatum
-- `updated_at: datetime` - Änderungsdatum
-- `notes: str` - Anmerkungen
+- `Book`
+- `Movement`
 
-**Methoden:**
-- `update_quantity(amount: int) -> None` - Bestand ändern
-- `get_total_value() -> float` - Gesamtwert berechnen
+### Pydantic Schemas (API Payloads)
+**Ort:** `src1/backend/app/db/schemas.py`
 
-### Movement
-
-**Attribute:**
-- `id: str` - Eindeutige Bewegungs-ID
-- `product_id: str` - Verweis auf Produkt
-- `product_name: str` - Name des Produkts
-- `quantity_change: int` - Mengenänderung (+/-)
-- `movement_type: str` - "IN", "OUT", "CORRECTION"
-- `reason: str` - Grund (optional)
-- `timestamp: datetime` - Zeitstempel
-- `performed_by: str` - Benutzer
+- `BookSchema`
+- `MovementSchema`
 
 ---
 
 ## Versionshistorie der Contracts
 
-### v0.1 (2025-01-20)
-- RepositoryPort: Grundlegende CRUD-Operationen
-- ReportPort: Basis-Report-Generierung
-- WarehouseService: Kern-Use-Cases
-- Product: Basis-Domain-Model
-- Movement: Lagerbewegungen-Protokoll
+### v0.2 (2026-04-10)
+- Einführung `app/contracts/*` als Ports
+- SQLAlchemy Repositories als Adapter
+- Services als klare Use-Case Schicht

@@ -4,52 +4,48 @@
 
 Dieses Dokument beschreibt die Test-Strategie und Test-Struktur des Projekts.
 
+**Wichtig:** Das Repository enthält derzeit zwei “Generationen”:
+
+- **Aktuelles Produkt (FastAPI Backend + React Frontend):** `src1/`
+- **Alte Projektvorlage (PyQt/Domain Template):** Teile der Root-Tests unter `tests/` beziehen sich noch darauf
+
+Diese Doku bezieht sich primär auf das **aktuelle Backend** unter `src1/backend/`.
+
 ## Test-Anatomie
 
 ### Unit Tests
 
 **Ziel:** Einzelne Komponenten isoliert testen (ohne externe Abhängigkeiten)
 
-**Speicherort:** `tests/unit/test_domain.py`
+**Empfohlener Speicherort (Backend):** `src1/backend/tests/unit/`
 
-#### TestProduct
-Testet die `Product`-Domänenklasse:
+#### Typische Unit-Test-Ziele (Backend)
 
-- `test_product_creation()` - Grundlegende Erstellung
-- `test_product_validation_negative_price()` - Validierung negativ Preis
-- `test_update_quantity()` - Bestandsänderung
-- `test_update_quantity_insufficient()` - Fehlerfall: zu wenig Bestand
-- `test_get_total_value()` - Wertberechnung
-
-#### TestWarehouseService
-Testet den `WarehouseService` mit Mock-Repository:
-
-- `test_create_product()` - Produkt erstellen
-- `test_add_to_stock()` - Bestand erhöhen
-- `test_remove_from_stock()` - Bestand verringern
-- `test_remove_from_stock_insufficient()` - Fehlerfall
-- `test_get_all_products()` - Alle Produkte abrufen
-- `test_get_total_inventory_value()` - Gesamtwert
-- `test_get_movements()` - Lagerbewegungen abrufen
+- Services:
+  - `BooksService` (delegiert, eher dünn)
+  - `InventoryService` (Regeln: OUT/IN/CORRECTION, Bestand darf nicht negativ werden)
+- Contracts:
+  - Repositories via Test-Doubles/Mocks (`Protocol`-Spec)
 
 ### Integration Tests
 
 **Ziel:** Mehrere Komponenten zusammen testen
 
-**Speicherort:** `tests/integration/test_integration.py`
+**Empfohlener Speicherort (Backend):** `src1/backend/tests/integration/`
 
-#### TestIntegration
-- `test_full_workflow()` - Kompletter Workflow (erstellen → ändern → berechnen)
-- `test_report_generation()` - Berichte generieren
+#### Typische Integration-Test-Ziele (Backend)
+
+- FastAPI Endpoints per `httpx` TestClient
+- SQLAlchemy + SQLite (isolierte DB pro Test)
+- End-to-End: `POST /books` → `POST /movements` → `GET /inventory`
 
 ## Test-Fixtures
 
 ```python
 @pytest.fixture
 def service():
-    """Fixture für WarehouseService mit In-Memory Repository"""
-    repository = InMemoryRepository()
-    return WarehouseService(repository)
+    """Beispiel: Service mit Fake-Repositories oder Test-DB"""
+    ...
 ```
 
 ## Test-Ausführung
@@ -57,6 +53,15 @@ def service():
 ### Alle Tests
 ```bash
 pytest tests/ -v
+```
+
+### Backend-Tests (empfohlen)
+
+Wenn du Tests unter `src1/backend/tests/` anlegst:
+
+```bash
+cd src1/backend
+pytest -q
 ```
 
 ### Nur Unit Tests
@@ -72,6 +77,13 @@ pytest tests/integration/ -v
 ### Mit Coverage
 ```bash
 pytest --cov=src tests/ --cov-report=html
+```
+
+Für das Backend:
+
+```bash
+cd src1/backend
+pytest --cov=app --cov-report=term-missing
 ```
 
 ### Einzelnen Test ausführen
@@ -191,9 +203,10 @@ git commit -m "Feat: Implement empty name validation"
 
 ## Known Issues & TODOs
 
-- [ ] GUI-Tests implementieren (optional, manuell möglich)
+- [ ] Backend-Tests unter `src1/backend/tests/` konsolidieren (statt Template-Tests in Root)
+- [ ] API Contract Tests (Schemas/Validation)
 - [ ] Performance-Tests für große Datenmengen
-- [ ] Stress-Tests für Concurrent Access
+- [ ] Concurrency/Stress Tests (optional)
 
 ## Test-Metriken
 
@@ -208,5 +221,5 @@ Ziel pro Milestone:
 
 ---
 
-**Letzte Aktualisierung:** 2025-01-20
-**Version:** 0.1
+**Letzte Aktualisierung:** 2026-04-10
+**Version:** 0.2

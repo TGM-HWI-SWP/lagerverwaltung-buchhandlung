@@ -33,13 +33,12 @@
 
 ### Features, die absichtlich nicht implementiert sind
 - Benutzer-Authentifizierung (v0.1)
-- Datenbank-Persistenz (erst ab v0.2)
-- Grafische Reports (erst ab v0.4)
+- Grafische Reports (Roadmap)
 - Mehrsprachigkeit
 
 ### Performance-Limitationen
-- In-Memory Repository: max. ~100.000 Produkte pro Session
-- Keine Pagination implementiert
+- Keine Pagination implementiert (bei sehr vielen Büchern relevant)
+- SQLite ist für sehr große Datenmengen begrenzt (Roadmap: Postgres)
 
 ---
 
@@ -51,3 +50,4 @@
 ---
 
 **Letzte Aktualisierung:** 2025-01-20
+**Hinweis:** Backend nutzt aktuell SQLite Persistenz (`src1/backend/app/db`).

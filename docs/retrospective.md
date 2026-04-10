@@ -1,5 +1,8 @@
 # Retrospektive
 
+> Hinweis: Diese Retrospektive ist als **ausfüllbare Vorlage** gedacht. Das aktuelle Produkt
+> (FastAPI Backend + React Frontend) liegt unter `src1/`.
+
 ## Projektübersicht
 
 **Projekttitel:** Lagerverwaltungssystem  
