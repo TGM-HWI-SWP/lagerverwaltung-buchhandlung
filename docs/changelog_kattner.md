@@ -45,6 +45,36 @@ Persönliches Changelog für Kattner, Rolle: Backend/Integration (FastAPI ↔ Re
 
 ---
 
+## [v0.2] - 2026-04-10
+
+### Implementiert
+- Backend-Architektur bereinigt und “verständlich” gemacht durch klare Schichten:
+  - `app/contracts/` (Ports als `Protocol`)
+  - `app/adapters/` (SQLAlchemy Repository Implementierungen)
+  - `app/services/` (Use-Cases, inkl. fachlicher Lagerbewegungs-Regeln)
+- Bestehende API-Module `app/api/books.py` und `app/api/inventory.py` so refactored, dass sie nur noch an Services delegieren (thin HTTP layer).
+- Dokumentation an das **tatsächliche** Produkt unter `src1/` angepasst:
+  - Architektur/Contracts beschreiben jetzt FastAPI + SQLAlchemy Setup statt die alte Template-Struktur.
+  - Test-Doku klärt “Template vs aktuelles Produkt” und empfiehlt Struktur für neue Backend-Tests.
+- Repository-Doku modernisiert:
+  - `README.md` auf Docker- und Local-Setup aktualisiert (Backend/Frontend Quickstart).
+  - Index/Workflow/Checklist/Template-Info ergänzt/aktualisiert.
+
+### Tests geschrieben
+- Keine neuen Tests (Refactoring + Doku-Konsolidierung).
+
+### Commits
+```
+- 9ea8eda Backend: introduce contracts/adapters/services layering
+- 9b6135b Docs: align architecture/contracts with FastAPI backend
+- 36abd11 Docs: refresh README and repo meta docs
+```
+
+### Mergekonflikt(e)
+- Keine
+
+---
+
 ## Zusammenfassung
 
 **Gesamt implementierte Features:** Backend-CRUD + DB-Session + SQLite + CORS + Root/Health + Inventory-Summary + minimale Book-Create/Delete UI + Vite-Fix  
