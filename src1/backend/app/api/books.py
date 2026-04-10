@@ -1,62 +1,30 @@
 from sqlalchemy.orm import Session
 
-from datetime import datetime, timezone
-from uuid import uuid4
-
+from app.adapters.sqlalchemy_repositories import SqlAlchemyBookRepository
 from app.db.models import Book
 from app.db.schemas import BookSchema
+from app.services.books import BooksService
+
+
+def _service(db: Session) -> BooksService:
+    return BooksService(SqlAlchemyBookRepository(db))
 
 
 def get_all_books(db: Session) -> list[Book]:
-    """Alle Bücher abrufen."""
-    return db.query(Book).order_by(Book.name.asc()).all()
+    return _service(db).list_books()
 
 
 def get_book(db: Session, book_id: str) -> Book | None:
-    """Ein Buch per ID abrufen."""
-    return db.query(Book).filter(Book.id == book_id).first()
+    return _service(db).get_book(book_id)
 
 
 def create_book(db: Session, book: BookSchema) -> Book:
-    """Neues Buch anlegen."""
-    payload = book.model_dump()
-    now = datetime.now(timezone.utc).isoformat()
-    payload["id"] = payload.get("id") or str(uuid4())
-    payload["created_at"] = payload.get("created_at") or now
-    payload["updated_at"] = payload.get("updated_at") or now
-    db_book = Book(**payload)
-    db.add(db_book)
-    db.commit()
-    db.refresh(db_book)
-    return db_book
+    return _service(db).create_book(book)
 
 
 def update_book(db: Session, book_id: str, book: BookSchema) -> Book | None:
-    """Buch aktualisieren."""
-    db_book = get_book(db, book_id)
-    if db_book is None:
-        return None
-
-    payload = book.model_dump()
-    for key, value in payload.items():
-        if key in {"id", "created_at"}:
-            continue
-        if value is not None:
-            setattr(db_book, key, value)
-
-    db_book.updated_at = datetime.now(timezone.utc).isoformat()
-
-    db.commit()
-    db.refresh(db_book)
-    return db_book
+    return _service(db).update_book(book_id, book)
 
 
 def delete_book(db: Session, book_id: str) -> bool:
-    """Buch löschen. Gibt True zurück wenn erfolgreich."""
-    db_book = get_book(db, book_id)
-    if db_book is None:
-        return False
-
-    db.delete(db_book)
-    db.commit()
-    return True
+    return _service(db).delete_book(book_id)
