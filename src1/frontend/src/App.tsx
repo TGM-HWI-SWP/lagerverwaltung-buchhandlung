@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 import {
   Sun,
   Moon,
@@ -40,12 +40,47 @@ type NewBookDraft = {
   notes: string;
 };
 
+type AppSettings = {
+  lowStockThreshold: number;
+  currency: "EUR" | "USD" | "CHF";
+  confirmDelete: boolean;
+  compactTable: boolean;
+  autoRefresh: boolean;
+  autoRefreshSeconds: number;
+};
+
+const DEFAULT_SETTINGS: AppSettings = {
+  lowStockThreshold: 5,
+  currency: "EUR",
+  confirmDelete: true,
+  compactTable: false,
+  autoRefresh: false,
+  autoRefreshSeconds: 30,
+};
+
+const SETTINGS_STORAGE_KEY = "bookmanager.settings";
+
 export default function Dashboard() {
   const [dark, setDark] = useState(true);
   const [page, setPage] = useState<PageKey>("dashboard");
   const [books, setBooks] = useState<Book[]>([]);
   const [loadingBooks, setLoadingBooks] = useState(false);
   const [bookError, setBookError] = useState<string | null>(null);
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    try {
+      const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+      if (!raw) {
+        return DEFAULT_SETTINGS;
+      }
+      const parsed = JSON.parse(raw) as Partial<AppSettings>;
+      return {
+        ...DEFAULT_SETTINGS,
+        ...parsed,
+      };
+    } catch {
+      return DEFAULT_SETTINGS;
+    }
+  });
 
   const toggleTheme = () => setDark((prev) => !prev);
 
@@ -61,6 +96,21 @@ export default function Dashboard() {
   useEffect(() => {
     reloadBooks();
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  }, [settings]);
+
+  useEffect(() => {
+    if (!settings.autoRefresh) {
+      return;
+    }
+    const intervalMs = Math.max(10, settings.autoRefreshSeconds) * 1000;
+    const id = window.setInterval(() => {
+      reloadBooks();
+    }, intervalMs);
+    return () => window.clearInterval(id);
+  }, [settings.autoRefresh, settings.autoRefreshSeconds]);
 
   const addBookToState = (book: Book) => {
     setBooks((prev) => [book, ...prev]);
@@ -159,12 +209,15 @@ export default function Dashboard() {
                 loading={loadingBooks}
                 error={bookError}
                 dark={dark}
+                settings={settings}
                 addBookToState={addBookToState}
                 removeBookFromState={removeBookFromState}
               />
             )}
             {page === "reports" && <ReportsPage card={card} />}
-            {page === "einstellungen" && <SettingsPage card={card} />}
+            {page === "einstellungen" && (
+              <SettingsPage card={card} dark={dark} settings={settings} setSettings={setSettings} />
+            )}
           </div>
         </div>
       </div>
@@ -222,6 +275,7 @@ function InventoryPage({
   loading,
   error,
   dark,
+  settings,
   addBookToState,
   removeBookFromState,
 }: {
@@ -230,6 +284,7 @@ function InventoryPage({
   loading: boolean;
   error: string | null;
   dark: boolean;
+  settings: AppSettings;
   addBookToState: (book: Book) => void;
   removeBookFromState: (id: string) => void;
 }) {
@@ -256,6 +311,9 @@ function InventoryPage({
   const tableBorder = dark ? "border-gray-800" : "border-gray-200";
   const tableHeadText = dark ? "text-gray-400" : "text-gray-500";
   const lowStockText = dark ? "text-amber-300" : "text-amber-700";
+  const currencySymbol =
+    settings.currency === "USD" ? "$" : settings.currency === "CHF" ? "CHF" : "€";
+  const rowPaddingClass = settings.compactTable ? "py-1" : "py-2";
   const formInputClass = dark
     ? "w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-white placeholder:text-gray-400"
     : "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500";
@@ -295,6 +353,12 @@ function InventoryPage({
   };
 
   const onDelete = async (id: string) => {
+    if (settings.confirmDelete) {
+      const confirmed = window.confirm("Moechtest du dieses Buch wirklich loeschen?");
+      if (!confirmed) {
+        return;
+      }
+    }
     try {
       await apiDelete(`/books/${id}`);
       removeBookFromState(id);
@@ -439,7 +503,7 @@ function InventoryPage({
                     key={book.id}
                     className={`border-b ${tableBorder} last:border-b-0`}
                   >
-                    <td className="py-2">
+                    <td className={rowPaddingClass}>
                       <div className="font-medium">{book.name}</div>
                       {!!book.author && (
                         <div className={`text-xs ${mutedText}`}>{book.author}</div>
@@ -447,8 +511,10 @@ function InventoryPage({
                       <div className={`text-xs ${mutedText}`}>{book.sku || "ohne SKU"}</div>
                     </td>
                     <td>{book.category || "-"}</td>
-                    <td>{book.price.toFixed(2)} €</td>
-                    <td className={book.quantity <= 5 ? lowStockText : ""}>
+                    <td>
+                      {book.price.toFixed(2)} {currencySymbol}
+                    </td>
+                    <td className={book.quantity <= settings.lowStockThreshold ? lowStockText : ""}>
                       <div className="flex items-center justify-between gap-3">
                         <span>{book.quantity}</span>
                         <Button
@@ -527,17 +593,142 @@ function ReportsPage({ card }: { card: string }) {
   );
 }
 
-function SettingsPage({ card }: { card: string }) {
+function SettingsPage({
+  card,
+  dark,
+  settings,
+  setSettings,
+}: {
+  card: string;
+  dark: boolean;
+  settings: AppSettings;
+  setSettings: Dispatch<SetStateAction<AppSettings>>;
+}) {
+  const labelClass = dark ? "text-sm text-gray-300" : "text-sm text-gray-700";
+  const inputClass = dark
+    ? "mt-1 w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-white"
+    : "mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900";
+  const sectionClass = dark
+    ? "rounded-xl border border-gray-800 p-4"
+    : "rounded-xl border border-gray-200 p-4";
+
+  const resetSettings = () => setSettings(DEFAULT_SETTINGS);
+
   return (
-    <Card className={card}>
-      <CardContent className="p-6">
-        <h2 className="mb-4 text-xl font-semibold">Systemeinstellungen</h2>
-        <p>
-          Hier können zukünftige Einstellungen für Datenbank oder Reports
-          ergänzt werden.
-        </p>
-      </CardContent>
-    </Card>
+    <div className="space-y-6">
+      <Card className={card}>
+        <CardContent className="space-y-4 p-6">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xl font-semibold">Systemeinstellungen</h2>
+            <Button variant="outline" onClick={resetSettings}>
+              Standard wiederherstellen
+            </Button>
+          </div>
+
+          <div className={sectionClass}>
+            <h3 className="mb-3 font-semibold">Lageranzeige</h3>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <label className={labelClass}>
+                Low-Stock-Schwelle
+                <input
+                  className={inputClass}
+                  type="number"
+                  min={0}
+                  value={settings.lowStockThreshold}
+                  onChange={(e) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      lowStockThreshold: Math.max(0, Number(e.target.value) || 0),
+                    }))
+                  }
+                />
+              </label>
+
+              <label className={labelClass}>
+                Waehrung
+                <select
+                  className={inputClass}
+                  value={settings.currency}
+                  onChange={(e) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      currency: e.target.value as AppSettings["currency"],
+                    }))
+                  }
+                >
+                  <option value="EUR">EUR (€)</option>
+                  <option value="USD">USD ($)</option>
+                  <option value="CHF">CHF</option>
+                </select>
+              </label>
+            </div>
+
+            <label className={`mt-4 flex items-center gap-2 ${labelClass}`}>
+              <input
+                type="checkbox"
+                checked={settings.compactTable}
+                onChange={(e) =>
+                  setSettings((prev) => ({
+                    ...prev,
+                    compactTable: e.target.checked,
+                  }))
+                }
+              />
+              Kompakte Tabellenansicht im Lager
+            </label>
+          </div>
+
+          <div className={sectionClass}>
+            <h3 className="mb-3 font-semibold">Sicherheit und Komfort</h3>
+
+            <label className={`mb-4 flex items-center gap-2 ${labelClass}`}>
+              <input
+                type="checkbox"
+                checked={settings.confirmDelete}
+                onChange={(e) =>
+                  setSettings((prev) => ({
+                    ...prev,
+                    confirmDelete: e.target.checked,
+                  }))
+                }
+              />
+              Loeschbestaetigung vor dem Entfernen eines Buchs
+            </label>
+
+            <label className={`mb-2 flex items-center gap-2 ${labelClass}`}>
+              <input
+                type="checkbox"
+                checked={settings.autoRefresh}
+                onChange={(e) =>
+                  setSettings((prev) => ({
+                    ...prev,
+                    autoRefresh: e.target.checked,
+                  }))
+                }
+              />
+              Automatisches Aktualisieren der Buchliste
+            </label>
+
+            <label className={labelClass}>
+              Aktualisierungsintervall (Sekunden)
+              <input
+                className={inputClass}
+                type="number"
+                min={10}
+                value={settings.autoRefreshSeconds}
+                onChange={(e) =>
+                  setSettings((prev) => ({
+                    ...prev,
+                    autoRefreshSeconds: Math.max(10, Number(e.target.value) || 10),
+                  }))
+                }
+                disabled={!settings.autoRefresh}
+              />
+            </label>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
