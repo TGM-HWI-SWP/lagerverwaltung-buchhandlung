@@ -30,3 +30,23 @@ class Movement(Base):
     reason = Column(Text, nullable=True)
     timestamp = Column(String, nullable=False)
     performed_by = Column(String, nullable=False, default="system")
+
+
+class Supplier(Base):
+    __tablename__ = "suppliers"
+
+    id = Column(String, primary_key=True)                   # Lieferanten-ID
+    name = Column(String, nullable=False)                   # Firmenname
+    contact = Column(String, default="")                    # E-Mail / Telefon
+    address = Column(String, default="")                    # Anschrift
+    notes = Column(Text, nullable=True)                     # Bemerkungen
+    created_at = Column(String, nullable=False)             # Anlegedatum
+
+
+class SupplierStock(Base):
+    __tablename__ = "supplier_stock"
+
+    supplier_id = Column(String, ForeignKey("suppliers.id"), primary_key=True)  # Lieferant
+    book_id = Column(String, ForeignKey("books.id"), primary_key=True)          # Buch
+    quantity = Column(Integer, nullable=False, default=0)                       # Lager beim Lieferanten
+    price = Column(Float, nullable=False, default=0.0)                          # Einkaufspreis pro Stueck
