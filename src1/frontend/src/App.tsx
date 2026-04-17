@@ -53,7 +53,7 @@ export default function Dashboard() {
     setLoadingBooks(true);
     setBookError(null);
     apiGet<Book[]>("/books")
-      .then((data) => setBooks(data))
+      .then((data: Book[]) => setBooks(data))
       .catch((err: Error) => setBookError(err.message))
       .finally(() => setLoadingBooks(false));
   };
@@ -61,6 +61,14 @@ export default function Dashboard() {
   useEffect(() => {
     reloadBooks();
   }, []);
+
+  const addBookToState = (book: Book) => {
+    setBooks((prev) => [book, ...prev]);
+  };
+
+  const removeBookFromState = (id: string) => {
+    setBooks((prev) => prev.filter((book) => book.id !== id));
+  };
 
   const stats = useMemo(() => {
     const totalBooks = books.length;
@@ -75,8 +83,8 @@ export default function Dashboard() {
     : "min-h-screen bg-gray-100 text-gray-900";
 
   const sidebar = dark
-    ? "w-64 bg-gray-900 text-white"
-    : "w-64 bg-white text-gray-900 border-r";
+    ? "w-64 min-h-screen shrink-0 bg-gray-900 text-white"
+    : "w-64 min-h-screen shrink-0 border-r bg-white text-gray-900";
 
   const topbar = dark
     ? "flex justify-between items-center p-6 border-b border-gray-800"
@@ -88,7 +96,7 @@ export default function Dashboard() {
 
   return (
     <div className={container}>
-      <div className="flex">
+      <div className="flex min-h-screen">
         {/* Sidebar */}
         <div className={sidebar}>
           <div className="p-6 text-xl font-bold">BookManager</div>
@@ -130,7 +138,7 @@ export default function Dashboard() {
         </div>
 
         {/* Main Area */}
-        <div className="flex-1">
+        <div className="flex-1 min-h-screen">
           {/* Topbar */}
           <div className={topbar}>
             <h1 className="text-2xl font-semibold capitalize">{page}</h1>
@@ -151,7 +159,8 @@ export default function Dashboard() {
                 loading={loadingBooks}
                 error={bookError}
                 dark={dark}
-                reloadBooks={reloadBooks}
+                addBookToState={addBookToState}
+                removeBookFromState={removeBookFromState}
               />
             )}
             {page === "reports" && <ReportsPage card={card} />}
@@ -213,13 +222,16 @@ function InventoryPage({
   loading,
   error,
   dark,
+  addBookToState,
+  removeBookFromState,
 }: {
   card: string;
   books: Book[];
   loading: boolean;
   error: string | null;
   dark: boolean;
-  reloadBooks: () => void;
+  addBookToState: (book: Book) => void;
+  removeBookFromState: (id: string) => void;
 }) {
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
@@ -252,7 +264,7 @@ function InventoryPage({
     setCreating(true);
     setCreateError(null);
     try {
-      await apiPost<Book, Partial<Book>>("/books", {
+      const createdBook = await apiPost<Book, Partial<Book>>("/books", {
         name: draft.name.trim(),
         author: draft.author.trim(),
         description: draft.description.trim() || "-",
@@ -262,6 +274,7 @@ function InventoryPage({
         category: draft.category.trim(),
         notes: draft.notes.trim() || null,
       });
+      addBookToState(createdBook);
       setDraft({
         name: "",
         author: "",
@@ -273,7 +286,6 @@ function InventoryPage({
         notes: "",
       });
       setCreateOpen(false);
-      reloadBooks();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unbekannter Fehler";
       setCreateError(message);
@@ -285,7 +297,7 @@ function InventoryPage({
   const onDelete = async (id: string) => {
     try {
       await apiDelete(`/books/${id}`);
-      reloadBooks();
+      removeBookFromState(id);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unbekannter Fehler";
       setCreateError(message);
