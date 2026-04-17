@@ -179,8 +179,17 @@ export default function Dashboard() {
   const reloadBooks = () => {
     setLoadingBooks(true);
     setBookError(null);
-    apiGet<Book[]>("/books")
-      .then((data: Book[]) => setBooks(data))
+    type BookApi = Book & { purchase_price?: number; sell_price?: number };
+    apiGet<BookApi[]>("/books")
+      .then((data: BookApi[]) =>
+        setBooks(
+          data.map((b: BookApi) => ({
+            ...b,
+            purchasePrice: b.purchase_price ?? b.purchasePrice ?? 0,
+            sellingPrice: b.sell_price ?? b.sellingPrice ?? 0,
+          }))
+        )
+      )
       .catch((err: Error) => setBookError(err.message))
       .finally(() => setLoadingBooks(false));
   };

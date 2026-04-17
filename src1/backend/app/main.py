@@ -82,34 +82,6 @@ def _ensure_default_supplier_data():
                 },
             )
 
-        # Fehlende Buch-Einträge im Lieferantenlager nachziehen.
-        book_rows = conn.execute(text("SELECT id, purchase_price FROM books")).mappings().all()
-        for row in book_rows:
-            exists = conn.execute(
-                text(
-                    """
-                    SELECT COUNT(*) FROM supplier_stock
-                    WHERE supplier_id = :supplier_id AND book_id = :book_id
-                    """
-                ),
-                {"supplier_id": supplier_id, "book_id": row["id"]},
-            ).scalar()
-            if not exists:
-                conn.execute(
-                    text(
-                        """
-                        INSERT INTO supplier_stock (supplier_id, book_id, quantity, price)
-                        VALUES (:supplier_id, :book_id, :quantity, :price)
-                        """
-                    ),
-                    {
-                        "supplier_id": supplier_id,
-                        "book_id": row["id"],
-                        "quantity": 9999,
-                        "price": float(row["purchase_price"] or 0),
-                    },
-                )
-
 
 _ensure_default_supplier_data()
 

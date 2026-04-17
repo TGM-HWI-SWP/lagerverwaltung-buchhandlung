@@ -1,9 +1,8 @@
 from datetime import datetime, timezone
-from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
-from app.db.models import Supplier, SupplierStock, Book, Movement
+from app.db.models import Supplier, Book, Movement
 
 
 def get_all_suppliers(db: Session) -> list[Supplier]:
@@ -17,23 +16,35 @@ def get_supplier(db: Session, supplier_id: str) -> Supplier | None:
 
 
 def get_supplier_stock(db: Session, supplier_id: str) -> list[dict]:
-    """Lager des Lieferanten abrufen (Buecher mit Stueckzahl und Preis)."""
-    rows = (
-        db.query(SupplierStock, Book)
-        .join(Book, Book.id == SupplierStock.book_id)
-        .filter(SupplierStock.supplier_id == supplier_id)
+    """Buecher des Lieferanten mit Einkaufspreis zurueckgeben."""
+    books = (
+        db.query(Book)
+        .filter(Book.supplier_id == supplier_id)
         .order_by(Book.name.asc())
         .all()
     )
     return [
         {
-            "book_id": stock.book_id,
+            "book_id": book.id,
             "book_name": book.name,
-            "quantity": int(stock.quantity),
-            "price": float(stock.price),
+            "quantity": int(book.quantity),
+            "price": float(book.purchase_price),
         }
-        for stock, book in rows
+        for book in books
     ]
+
+
+def _next_movement_id(db: Session) -> str:
+    import re
+    ids = db.query(Movement.id).all()
+    max_num = 0
+    for (mid,) in ids:
+        match = re.fullmatch(r"M(\d+)", mid or "")
+        if match:
+            num = int(match.group(1))
+            if num > max_num:
+                max_num = num
+    return f"M{max_num + 1:03d}"
 
 
 def order_from_supplier(
@@ -51,26 +62,17 @@ def order_from_supplier(
     if supplier is None:
         raise ValueError("Lieferant nicht gefunden")
 
-    stock = (
-        db.query(SupplierStock)
-        .filter(SupplierStock.supplier_id == supplier_id, SupplierStock.book_id == book_id)
-        .first()
-    )
-    if stock is None:
-        raise ValueError("Buch ist beim Lieferanten nicht gelistet")
-    if stock.quantity < quantity:
-        raise ValueError(f"Lieferant hat nur {stock.quantity} Stueck verfuegbar")
-
     book = db.query(Book).filter(Book.id == book_id).first()
     if book is None:
         raise ValueError("Buch nicht gefunden")
+    if book.supplier_id != supplier_id:
+        raise ValueError("Buch ist bei diesem Lieferanten nicht gelistet")
 
-    stock.quantity = int(stock.quantity) - quantity                             # Lieferantenlager reduzieren
-    book.quantity = int(book.quantity) + quantity                               # Eigenes Lager erhoehen
+    book.quantity = int(book.quantity) + quantity
 
     now = datetime.now(timezone.utc).isoformat()
     movement = Movement(
-        id=str(uuid4()),
+        id=_next_movement_id(db),
         book_id=book.id,
         book_name=book.name,
         quantity_change=quantity,
@@ -81,7 +83,7 @@ def order_from_supplier(
     )
     db.add(movement)
 
-    book.updated_at = now                                                       # Aktualisierungszeit
+    book.updated_at = now
     db.commit()
     db.refresh(movement)
     return movement

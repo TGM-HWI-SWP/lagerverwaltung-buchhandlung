@@ -46,10 +46,3 @@ class Supplier(Base):
     created_at = Column(String, nullable=False)             # Anlegedatum
 
 
-class SupplierStock(Base):
-    __tablename__ = "supplier_stock"
-
-    supplier_id = Column(String, ForeignKey("suppliers.id"), primary_key=True)  # Lieferant
-    book_id = Column(String, ForeignKey("books.id"), primary_key=True)          # Buch
-    quantity = Column(Integer, nullable=False, default=0)                       # Lager beim Lieferanten
-    price = Column(Float, nullable=False, default=0.0)                          # Einkaufspreis pro Stueck

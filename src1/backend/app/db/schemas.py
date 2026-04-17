@@ -46,16 +46,6 @@ class SupplierSchema(BaseModel):
         from_attributes = True
 
 
-class SupplierStockSchema(BaseModel):
-    supplier_id: str
-    book_id: str
-    quantity: int = 0
-    price: float = 0.0
-
-    class Config:
-        from_attributes = True
-
-
 class SupplierStockEntry(BaseModel):
     book_id: str
     book_name: str
