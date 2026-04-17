@@ -92,13 +92,13 @@ INSERT INTO suppliers (id, name, contact, address, notes, created_at) VALUES
 -- ============================================
 
 INSERT INTO supplier_stock (supplier_id, book_id, quantity, price) VALUES
-('S001', 'B001', 9999, 0),   -- Der Herr der Ringe
-('S001', 'B002', 9999, 0),   -- Harry Potter und der Stein der Weisen
-('S001', 'B003', 9999, 0),   -- 1984
-('S001', 'B004', 9999, 0),   -- Die Verwandlung
-('S001', 'B005', 9999, 0),   -- Faust I
-('S001', 'B006', 9999, 0),   -- Der kleine Prinz
-('S001', 'B007', 9999, 0),   -- Sapiens
-('S001', 'B008', 9999, 0),   -- Clean Code
-('S001', 'B009', 9999, 0),   -- Das Parfum
-('S001', 'B010', 9999, 0);   -- Die unendliche Geschichte
+('S001', 'B001', 9999, 29.99),   -- Der Herr der Ringe
+('S001', 'B002', 9999, 14.99),   -- Harry Potter und der Stein der Weisen
+('S001', 'B003', 9999, 12.99),   -- 1984
+('S001', 'B004', 9999, 8.50),    -- Die Verwandlung
+('S001', 'B005', 9999, 6.99),    -- Faust I
+('S001', 'B006', 9999, 9.99),    -- Der kleine Prinz
+('S001', 'B007', 9999, 16.99),   -- Sapiens
+('S001', 'B008', 9999, 34.99),   -- Clean Code
+('S001', 'B009', 9999, 11.99),   -- Das Parfum
+('S001', 'B010', 9999, 13.50);   -- Die unendliche Geschichte
