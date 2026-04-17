@@ -173,3 +173,91 @@ def delete_movement(movement_id: str, db: Session = Depends(get_db)):
     if not inventory.delete_movement(db, movement_id):                          # Nicht gefunden
         raise HTTPException(status_code=404, detail="Bewegung nicht gefunden")
     return {"detail": "Bewegung gelöscht"}
+
+
+# ── Inventory ──────────────────────────────────────────
+
+
+@app.get("/inventory")                                                          # Lager-Uebersicht
+def inventory_summary(db: Session = Depends(get_db)):
+    total_titles = db.query(func.count(Book.id)).scalar() or 0
+    total_units = db.query(func.coalesce(func.sum(Book.quantity), 0)).scalar() or 0
+    low_stock = db.query(Book).filter(Book.quantity <= 5).order_by(Book.quantity.asc()).all()
+    return {
+        "total_titles": total_titles,
+        "total_units": int(total_units),
+        "low_stock_books": [BookSchema.model_validate(book).model_dump() for book in low_stock],
+    }
+
+
+# ── Reports ────────────────────────────────────────────
+
+
+@app.get("/reports/inventory-pdf")                                              # PDF-Report
+def inventory_pdf(db: Session = Depends(get_db)):
+    rows = (                                                                    # Bestand pro Kategorie
+        db.query(Book.category, func.coalesce(func.sum(Book.quantity), 0))
+        .group_by(Book.category)
+        .all()
+    )
+    data = [(cat or "Ohne Kategorie", int(qty)) for cat, qty in rows if int(qty) > 0]
+    if not data:                                                                # Leerer Bestand
+        data = [("Keine Daten", 1)]
+
+    labels = [d[0] for d in data]
+    sizes = [d[1] for d in data]
+
+    buffer = io.BytesIO()
+    with PdfPages(buffer) as pdf:
+        fig, ax = plt.subplots(figsize=(8.27, 11.69))                           # A4-Hochformat
+        ax.pie(sizes, labels=labels, autopct="%1.1f%%", startangle=90)
+        ax.axis("equal")
+        timestamp = datetime.now().strftime("%d.%m.%Y %H:%M")
+        fig.suptitle(f"Lagerbestand nach Kategorien\nStand: {timestamp}", fontsize=14)
+        pdf.savefig(fig)
+        plt.close(fig)
+
+    buffer.seek(0)
+    headers = {"Content-Disposition": 'attachment; filename="lagerbestand.pdf"'}
+    return StreamingResponse(buffer, media_type="application/pdf", headers=headers)
+
+
+# ── Suppliers ──────────────────────────────────────────
+
+
+@app.get("/suppliers", response_model=list[SupplierSchema])                     # Alle Lieferanten
+def read_suppliers(db: Session = Depends(get_db)):
+    return suppliers.get_all_suppliers(db)
+
+
+@app.get("/suppliers/{supplier_id}", response_model=SupplierSchema)             # Lieferant per ID
+def read_supplier(supplier_id: str, db: Session = Depends(get_db)):
+    supplier = suppliers.get_supplier(db, supplier_id)
+    if supplier is None:                                                        # Nicht gefunden
+        raise HTTPException(status_code=404, detail="Lieferant nicht gefunden")
+    return supplier
+
+
+@app.get("/suppliers/{supplier_id}/stock", response_model=list[SupplierStockEntry])  # Lager des Lieferanten
+def read_supplier_stock(supplier_id: str, db: Session = Depends(get_db)):
+    if suppliers.get_supplier(db, supplier_id) is None:                         # Existenz pruefen
+        raise HTTPException(status_code=404, detail="Lieferant nicht gefunden")
+    return suppliers.get_supplier_stock(db, supplier_id)
+
+
+@app.post("/suppliers/{supplier_id}/order", response_model=MovementSchema, status_code=201)  # Bestellen
+def order_from_supplier(
+    supplier_id: str,
+    order: SupplierOrderRequest,
+    db: Session = Depends(get_db),
+):
+    try:
+        return suppliers.order_from_supplier(
+            db,
+            supplier_id=supplier_id,
+            book_id=order.book_id,
+            quantity=order.quantity,
+            performed_by=order.performed_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
