@@ -5,8 +5,14 @@ from sqlalchemy.orm import Session                                              
 from app.core.config import settings                                            # App-Konfiguration
 from app.db.models import Base                                                  # DB-Modelle
 from app.db.session import engine, get_db                                       # DB-Verbindung
-from app.db.schemas import BookSchema, MovementSchema                           # Pydantic-Schemas
-from app.api import books, inventory                                            # CRUD-Logik
+from app.db.schemas import (                                                    # Pydantic-Schemas
+    BookSchema,
+    MovementSchema,
+    SupplierSchema,
+    SupplierStockEntry,
+    SupplierOrderRequest,
+)
+from app.api import books, inventory, suppliers                                 # CRUD-Logik
 
 
 Base.metadata.create_all(bind=engine)                                           # Tabellen erstellen
@@ -92,3 +98,44 @@ def delete_movement(movement_id: str, db: Session = Depends(get_db)):
     if not inventory.delete_movement(db, movement_id):                          # Nicht gefunden
         raise HTTPException(status_code=404, detail="Bewegung nicht gefunden")
     return {"detail": "Bewegung gelöscht"}
+
+
+# ── Suppliers ──────────────────────────────────────────
+
+
+@app.get("/suppliers", response_model=list[SupplierSchema])                     # Alle Lieferanten
+def read_suppliers(db: Session = Depends(get_db)):
+    return suppliers.get_all_suppliers(db)
+
+
+@app.get("/suppliers/{supplier_id}", response_model=SupplierSchema)             # Lieferant per ID
+def read_supplier(supplier_id: str, db: Session = Depends(get_db)):
+    supplier = suppliers.get_supplier(db, supplier_id)
+    if supplier is None:                                                        # Nicht gefunden
+        raise HTTPException(status_code=404, detail="Lieferant nicht gefunden")
+    return supplier
+
+
+@app.get("/suppliers/{supplier_id}/stock", response_model=list[SupplierStockEntry])  # Lager des Lieferanten
+def read_supplier_stock(supplier_id: str, db: Session = Depends(get_db)):
+    if suppliers.get_supplier(db, supplier_id) is None:                         # Existenz pruefen
+        raise HTTPException(status_code=404, detail="Lieferant nicht gefunden")
+    return suppliers.get_supplier_stock(db, supplier_id)
+
+
+@app.post("/suppliers/{supplier_id}/order", response_model=MovementSchema, status_code=201)  # Bestellen
+def order_from_supplier(
+    supplier_id: str,
+    order: SupplierOrderRequest,
+    db: Session = Depends(get_db),
+):
+    try:
+        return suppliers.order_from_supplier(
+            db,
+            supplier_id=supplier_id,
+            book_id=order.book_id,
+            quantity=order.quantity,
+            performed_by=order.performed_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

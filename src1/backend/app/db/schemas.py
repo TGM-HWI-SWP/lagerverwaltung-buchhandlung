@@ -29,3 +29,38 @@ class MovementSchema(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class SupplierSchema(BaseModel):
+    id: str
+    name: str
+    contact: str = ""
+    address: str = ""
+    notes: str | None = None
+    created_at: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class SupplierStockSchema(BaseModel):
+    supplier_id: str
+    book_id: str
+    quantity: int = 0
+    price: float = 0.0
+
+    class Config:
+        from_attributes = True
+
+
+class SupplierStockEntry(BaseModel):
+    book_id: str
+    book_name: str
+    quantity: int
+    price: float
+
+
+class SupplierOrderRequest(BaseModel):
+    book_id: str
+    quantity: int
+    performed_by: str = "system"
