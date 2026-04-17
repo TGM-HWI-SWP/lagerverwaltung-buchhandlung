@@ -65,6 +65,7 @@ Persönliches Changelog für Kaufmann, Rolle: GUI-Designer
 - Systemeinstellungen überarbeitet
 - fürs erste die GUI fertiggestellt
 - Bestellungs Tab hinzugefügt + Funktionen
+- 3 neue tabs und grobe überarbeitungen
 
 ### Tests geschrieben
 - keine
@@ -74,6 +75,7 @@ Persönliches Changelog für Kaufmann, Rolle: GUI-Designer
 - 289fc571a51d7cc40ea7c8438d8ebb94873ee88d: sidebar & reload bug gefixed
 - 4259bea3dd474ceb57561072f2c1f2a3d071f6a4: ein paar sinnvolle einstellungen
 - 578ca2fbadb9800bd99333a50cd9062937837525: Bestell Tab
+- e9c6133b1d5e73849dd7c7c62df63f133bbbe9d4: 3 neue tabs und grobe überarbeitungen
 
 
 ```
