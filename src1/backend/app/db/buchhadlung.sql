@@ -5,13 +5,16 @@ CREATE TABLE IF NOT EXISTS books (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT NOT NULL,
-    price REAL NOT NULL CHECK (price >= 0),
+    purchase_price REAL NOT NULL CHECK (purchase_price >= 0),
+    sell_price REAL NOT NULL CHECK (sell_price >= 0),
     quantity INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0),
     sku TEXT DEFAULT '',
     category TEXT DEFAULT '',
+    supplier_id TEXT DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-    notes TEXT
+    notes TEXT,
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
 );
 
 -- Lagerbewegungen-Tabelle
@@ -49,23 +52,23 @@ CREATE TABLE IF NOT EXISTS supplier_stock (
 );
 
 -- ============================================
--- Dummy-Daten: Produkte (Bücher)
+-- Bücher
 -- ============================================
 
-INSERT INTO books (id, name, author, description, price, quantity, sku, category, created_at, updated_at, notes) VALUES
-('B001', 'Der Herr der Ringe', 'J.R.R. Tolkien', 'Fantasy-Epos von J.R.R. Tolkien', 29.99, 15, 'ISBN-978-3-608-93981-2', 'Fantasy', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
-('B002', 'Harry Potter und der Stein der Weisen', 'J.K. Rowling', 'Erster Band der Harry-Potter-Reihe von J.K. Rowling', 14.99, 25, 'ISBN-978-3-551-35401-3', 'Fantasy', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
-('B003', '1984', 'George Orwell', 'Dystopischer Roman von George Orwell', 12.99, 10, 'ISBN-978-3-548-23410-0', 'Dystopie', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
-('B004', 'Die Verwandlung', 'Franz Kafka', 'Erzählung von Franz Kafka', 8.50, 7, 'ISBN-978-3-15-009900-1', 'Klassiker', datetime('now', 'localtime'), datetime('now', 'localtime'), 'Schulklassiker'),
-('B005', 'Faust I', 'Johann Wolfgang von Goethe', 'Tragödie von Johann Wolfgang von Goethe', 6.99, 20, 'ISBN-978-3-15-000001-5', 'Klassiker', datetime('now', 'localtime'), datetime('now', 'localtime'), 'Pflichtlektüre'),
-('B006', 'Der kleine Prinz', 'Antoine de Saint-Exupéry', 'Erzählung von Antoine de Saint-Exupéry', 9.99, 30, 'ISBN-978-3-7306-0816-5', 'Kinderbuch', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
-('B007', 'Sapiens: Eine kurze Geschichte der Menschheit', 'Yuval Noah Harari', 'Sachbuch von Yuval Noah Harari', 16.99, 12, 'ISBN-978-3-421-04595-9', 'Sachbuch', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
-('B008', 'Clean Code', 'Robert C. Martin', 'Handbuch für agile Software-Entwicklung von Robert C. Martin', 34.99, 5, 'ISBN-978-0-13-235088-4', 'Fachbuch', datetime('now', 'localtime'), datetime('now', 'localtime'), 'Beliebtes IT-Buch'),
-('B009', 'Das Parfum', 'Patrick Süskind', 'Roman von Patrick Süskind', 11.99, 8, 'ISBN-978-3-257-22800-7', 'Roman', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
-('B010', 'Die unendliche Geschichte', 'Michael Ende', 'Fantasyroman von Michael Ende', 13.50, 18, 'ISBN-978-3-522-20260-9', 'Fantasy', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL);
+INSERT INTO books (id, name, author, description, purchase_price, sell_price, quantity, sku, category, supplier_id, created_at, updated_at, notes) VALUES
+('B001', 'Der Herr der Ringe', 'J.R.R. Tolkien', 'Fantasy-Epos von J.R.R. Tolkien', 20.99, 29.99, 15, 'ISBN-978-3-608-93981-2', 'Fantasy', 'S001', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
+('B002', 'Harry Potter und der Stein der Weisen', 'J.K. Rowling', 'Erster Band der Harry-Potter-Reihe von J.K. Rowling', 10.49, 14.99, 25, 'ISBN-978-3-551-35401-3', 'Fantasy', 'S001', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
+('B003', '1984', 'George Orwell', 'Dystopischer Roman von George Orwell', 9.09, 12.99, 10, 'ISBN-978-3-548-23410-0', 'Dystopie', 'S001', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
+('B004', 'Die Verwandlung', 'Franz Kafka', 'Erzählung von Franz Kafka', 5.95, 8.50, 7, 'ISBN-978-3-15-009900-1', 'Klassiker', 'S001', datetime('now', 'localtime'), datetime('now', 'localtime'), 'Schulklassiker'),
+('B005', 'Faust I', 'Johann Wolfgang von Goethe', 'Tragödie von Johann Wolfgang von Goethe', 4.89, 6.99, 20, 'ISBN-978-3-15-000001-5', 'Klassiker', 'S001', datetime('now', 'localtime'), datetime('now', 'localtime'), 'Pflichtlektüre'),
+('B006', 'Der kleine Prinz', 'Antoine de Saint-Exupéry', 'Erzählung von Antoine de Saint-Exupéry', 6.99, 9.99, 30, 'ISBN-978-3-7306-0816-5', 'Kinderbuch', 'S001', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
+('B007', 'Sapiens: Eine kurze Geschichte der Menschheit', 'Yuval Noah Harari', 'Sachbuch von Yuval Noah Harari', 11.89, 16.99, 12, 'ISBN-978-3-421-04595-9', 'Sachbuch', 'S001', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
+('B008', 'Clean Code', 'Robert C. Martin', 'Handbuch für agile Software-Entwicklung von Robert C. Martin', 24.49, 34.99, 5, 'ISBN-978-0-13-235088-4', 'Fachbuch', 'S001', datetime('now', 'localtime'), datetime('now', 'localtime'), 'Beliebtes IT-Buch'),
+('B009', 'Das Parfum', 'Patrick Süskind', 'Roman von Patrick Süskind', 8.39, 11.99, 8, 'ISBN-978-3-257-22800-7', 'Roman', 'S001', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
+('B010', 'Die unendliche Geschichte', 'Michael Ende', 'Fantasyroman von Michael Ende', 9.45, 13.50, 18, 'ISBN-978-3-522-20260-9', 'Fantasy', 'S001', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL);
 
 -- ============================================
--- Dummy-Daten: Lagerbewegungen
+-- Lagerbewegungen
 -- ============================================
 
 INSERT INTO movements (id, book_id, book_name, quantity_change, movement_type, reason, timestamp, performed_by) VALUES
@@ -81,24 +84,10 @@ INSERT INTO movements (id, book_id, book_name, quantity_change, movement_type, r
 ('M010', 'B003', '1984', -2, 'CORRECTION', 'Inventur - beschädigte Exemplare', datetime('now', '-1 days', 'localtime'), 'Markus');
 
 -- ============================================
--- Dummy-Daten: Lieferanten
+-- Lieferanten
 -- ============================================
 
 INSERT INTO suppliers (id, name, contact, address, notes, created_at) VALUES
-('S001', 'Buchgrosshandel Wien GmbH', 'kontakt@bgh-wien.at', 'Mariahilfer Strasse 100, 1060 Wien', 'Hauptlieferant fuer alle Buecher', datetime('now', 'localtime'));
+('S001', 'Buchgrosshandel Wien GmbH', 'kontakt@bgh-wien.at', 'Mariahilfer Strasse 100, 1060 Wien', 'Hauptlieferant fuer alle Buecher', datetime('now', 'localtime')),
+('S002', 'Thalia', 'Thalia@thalia.at', 'Mariahilfer Strasse 30, 1060 Wien', 'Bücherlieferant', datetime('now', 'localtime'));
 
--- ============================================
--- Dummy-Daten: Lager des Lieferanten (alle Buecher, je 9999 Stueck)
--- ============================================
-
-INSERT INTO supplier_stock (supplier_id, book_id, quantity, price) VALUES
-('S001', 'B001', 9999, 29.99),   -- Der Herr der Ringe
-('S001', 'B002', 9999, 14.99),   -- Harry Potter und der Stein der Weisen
-('S001', 'B003', 9999, 12.99),   -- 1984
-('S001', 'B004', 9999, 8.50),    -- Die Verwandlung
-('S001', 'B005', 9999, 6.99),    -- Faust I
-('S001', 'B006', 9999, 9.99),    -- Der kleine Prinz
-('S001', 'B007', 9999, 16.99),   -- Sapiens
-('S001', 'B008', 9999, 34.99),   -- Clean Code
-('S001', 'B009', 9999, 11.99),   -- Das Parfum
-('S001', 'B010', 9999, 13.50);   -- Die unendliche Geschichte

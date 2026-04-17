@@ -6,10 +6,12 @@ class BookSchema(BaseModel):
     name: str
     author: str = ""
     description: str
-    price: float
+    purchase_price: float
+    sell_price: float
     quantity: int = 0
     sku: str = ""
     category: str = ""
+    supplier_id: str = ""
     created_at: str | None = None
     updated_at: str | None = None
     notes: str | None = None
