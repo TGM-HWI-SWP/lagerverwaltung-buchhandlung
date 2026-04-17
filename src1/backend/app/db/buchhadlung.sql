@@ -40,16 +40,6 @@ CREATE TABLE IF NOT EXISTS suppliers (
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
--- Lager des Lieferanten (welche Buecher in welcher Stueckzahl bestellbar)
-CREATE TABLE IF NOT EXISTS supplier_stock (
-    supplier_id TEXT NOT NULL,
-    book_id TEXT NOT NULL,
-    quantity INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0),
-    price REAL NOT NULL DEFAULT 0 CHECK (price >= 0),
-    PRIMARY KEY (supplier_id, book_id),
-    FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
-    FOREIGN KEY (book_id) REFERENCES books(id)
-);
 
 -- ============================================
 -- Bücher
