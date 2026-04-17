@@ -27,6 +27,27 @@ CREATE TABLE IF NOT EXISTS movements (
     FOREIGN KEY (book_id) REFERENCES books(id)
 );
 
+-- Lieferanten-Tabelle
+CREATE TABLE IF NOT EXISTS suppliers (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    contact TEXT DEFAULT '',
+    address TEXT DEFAULT '',
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
+-- Lager des Lieferanten (welche Buecher in welcher Stueckzahl bestellbar)
+CREATE TABLE IF NOT EXISTS supplier_stock (
+    supplier_id TEXT NOT NULL,
+    book_id TEXT NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+    price REAL NOT NULL DEFAULT 0 CHECK (price >= 0),
+    PRIMARY KEY (supplier_id, book_id),
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
+    FOREIGN KEY (book_id) REFERENCES books(id)
+);
+
 -- ============================================
 -- Dummy-Daten: Produkte (Bücher)
 -- ============================================
@@ -58,3 +79,26 @@ INSERT INTO movements (id, book_id, book_name, quantity_change, movement_type, r
 ('M008', 'B004', 'Die Verwandlung', -3, 'OUT', 'Verkauf', datetime('now', '-2 days', 'localtime'), 'Tristan'),
 ('M009', 'B006', 'Der kleine Prinz', 30, 'IN', 'Erstlieferung', datetime('now', '-2 days', 'localtime'), 'David'),
 ('M010', 'B003', '1984', -2, 'CORRECTION', 'Inventur - beschädigte Exemplare', datetime('now', '-1 days', 'localtime'), 'Markus');
+
+-- ============================================
+-- Dummy-Daten: Lieferanten
+-- ============================================
+
+INSERT INTO suppliers (id, name, contact, address, notes, created_at) VALUES
+('S001', 'Buchgrosshandel Wien GmbH', 'kontakt@bgh-wien.at', 'Mariahilfer Strasse 100, 1060 Wien', 'Hauptlieferant fuer alle Buecher', datetime('now', 'localtime'));
+
+-- ============================================
+-- Dummy-Daten: Lager des Lieferanten (alle Buecher, je 9999 Stueck)
+-- ============================================
+
+INSERT INTO supplier_stock (supplier_id, book_id, quantity, price) VALUES
+('S001', 'B001', 9999, 0),   -- Der Herr der Ringe
+('S001', 'B002', 9999, 0),   -- Harry Potter und der Stein der Weisen
+('S001', 'B003', 9999, 0),   -- 1984
+('S001', 'B004', 9999, 0),   -- Die Verwandlung
+('S001', 'B005', 9999, 0),   -- Faust I
+('S001', 'B006', 9999, 0),   -- Der kleine Prinz
+('S001', 'B007', 9999, 0),   -- Sapiens
+('S001', 'B008', 9999, 0),   -- Clean Code
+('S001', 'B009', 9999, 0),   -- Das Parfum
+('S001', 'B010', 9999, 0);   -- Die unendliche Geschichte
