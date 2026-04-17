@@ -18,8 +18,14 @@ from app.core.config import settings                                            
 from app.db.models import Base                                                  # DB-Modelle
 from app.db.models import Book
 from app.db.session import engine, get_db                                       # DB-Verbindung
-from app.db.schemas import BookSchema, MovementSchema                           # Pydantic-Schemas
-from app.api import books, inventory                                            # CRUD-Logik
+from app.db.schemas import (                                                    # Pydantic-Schemas
+    BookSchema,
+    MovementSchema,
+    SupplierSchema,
+    SupplierStockEntry,
+    SupplierOrderRequest,
+)
+from app.api import books, inventory, suppliers                                 # CRUD-Logik
 
 
 Base.metadata.create_all(bind=engine)                                           # Tabellen erstellen
@@ -167,45 +173,3 @@ def delete_movement(movement_id: str, db: Session = Depends(get_db)):
     if not inventory.delete_movement(db, movement_id):                          # Nicht gefunden
         raise HTTPException(status_code=404, detail="Bewegung nicht gefunden")
     return {"detail": "Bewegung gelöscht"}
-
-
-@app.get("/inventory")
-def inventory_summary(db: Session = Depends(get_db)):
-    total_titles = db.query(func.count(Book.id)).scalar() or 0
-    total_units = db.query(func.coalesce(func.sum(Book.quantity), 0)).scalar() or 0
-    low_stock = db.query(Book).filter(Book.quantity <= 5).order_by(Book.quantity.asc()).all()
-    return {
-        "total_titles": total_titles,
-        "total_units": int(total_units),
-        "low_stock_books": [BookSchema.model_validate(book).model_dump() for book in low_stock],
-    }
-
-
-@app.get("/reports/inventory-pdf")                                              # PDF-Report
-def inventory_pdf(db: Session = Depends(get_db)):
-    rows = (                                                                    # Bestand pro Kategorie
-        db.query(Book.category, func.coalesce(func.sum(Book.quantity), 0))
-        .group_by(Book.category)
-        .all()
-    )
-    data = [(cat or "Ohne Kategorie", int(qty)) for cat, qty in rows if int(qty) > 0]
-
-    if not data:                                                                # Leerer Bestand
-        data = [("Keine Daten", 1)]
-
-    labels = [d[0] for d in data]                                               # Beschriftungen
-    sizes = [d[1] for d in data]                                                # Werte
-
-    buffer = io.BytesIO()                                                       # PDF im Speicher
-    with PdfPages(buffer) as pdf:
-        fig, ax = plt.subplots(figsize=(8.27, 11.69))                           # A4-Hochformat
-        ax.pie(sizes, labels=labels, autopct="%1.1f%%", startangle=90)          # Kreisdiagramm
-        ax.axis("equal")                                                        # Kreis statt Ellipse
-        timestamp = datetime.now().strftime("%d.%m.%Y %H:%M")
-        fig.suptitle(f"Lagerbestand nach Kategorien\nStand: {timestamp}", fontsize=14)
-        pdf.savefig(fig)                                                        # Seite speichern
-        plt.close(fig)                                                          # Speicher freigeben
-
-    buffer.seek(0)                                                              # Buffer-Anfang
-    headers = {"Content-Disposition": 'attachment; filename="lagerbestand.pdf"'}
-    return StreamingResponse(buffer, media_type="application/pdf", headers=headers)
