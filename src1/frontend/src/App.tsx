@@ -4,24 +4,36 @@ import {
   Sun,
   Moon,
   Package,
+  Truck,
+  ShoppingBag,
   ShoppingCart,
   BarChart3,
   FileText,
   Settings as SettingsIcon,
 } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { apiDelete, apiGet, apiPost } from "@/api/client";
+import { apiGet, apiPost, apiPut, apiDelete } from "@/api/client";
 
-type PageKey = "dashboard" | "lager" | "bestellungen" | "reports" | "einstellungen";
+type PageKey =
+  | "dashboard"
+  | "lager"
+  | "wareneingang"
+  | "warenausgang"
+  | "bestellentwicklung"
+  | "reports"
+  | "einstellungen";
 
 type Book = {
   id: string;
   name: string;
   author: string;
   description: string;
-  price: number;
+  purchasePrice: number;
+  sellingPrice: number;
+  price?: number; // for backward compatibility
   quantity: number;
   sku: string;
   category: string;
@@ -34,12 +46,16 @@ type NewBookDraft = {
   name: string;
   author: string;
   description: string;
-  price: string;
+  purchasePrice: string;
+  sellingPrice: string;
   quantity: string;
   sku: string;
   category: string;
+  supplierId: string;
   notes: string;
 };
+
+type EditBookDraft = NewBookDraft;
 
 type AppSettings = {
   lowStockThreshold: number;
@@ -95,6 +111,20 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 const SETTINGS_STORAGE_KEY = "bookmanager.settings";
 const ORDERS_STORAGE_KEY = "bookmanager.orders";
+const OUTBOUND_LOG_STORAGE_KEY = "bookmanager.outboundLog";
+
+type OutboundType = "Verkauf";
+
+type OutboundEntry = {
+  id: string;
+  bookId: string;
+  bookName: string;
+  type: OutboundType;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+  createdAt: string;
+};
 export default function Dashboard() {
   const [dark, setDark] = useState(true);
   const [page, setPage] = useState<PageKey>("dashboard");
@@ -127,10 +157,22 @@ export default function Dashboard() {
       return DEFAULT_SETTINGS;
     }
   });
+  const [outboundLog, setOutboundLog] = useState<OutboundEntry[]>(() => {
+    try {
+      const raw = localStorage.getItem(OUTBOUND_LOG_STORAGE_KEY);
+      if (!raw) {
+        return [];
+      }
+      return JSON.parse(raw) as OutboundEntry[];
+    } catch {
+      return [];
+    }
+  });
   const [supplier, setSupplier] = useState<Supplier | null>(null);
   const [supplierStock, setSupplierStock] = useState<SupplierStockEntry[]>([]);
   const [supplierLoading, setSupplierLoading] = useState(false);
   const [supplierError, setSupplierError] = useState<string | null>(null);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
 
   const toggleTheme = () => setDark((prev) => !prev);
 
@@ -152,8 +194,9 @@ export default function Dashboard() {
       setSupplierLoading(true);
       setSupplierError(null);
       try {
-        const suppliers = await apiGet<Supplier[]>("/suppliers");
-        const firstSupplier = suppliers[0] ?? null;
+        const allSuppliers = await apiGet<Supplier[]>("/suppliers");
+        setSuppliers(allSuppliers);
+        const firstSupplier = allSuppliers[0] ?? null;
         setSupplier(firstSupplier);
         if (!firstSupplier) {
           setSupplierStock([]);
@@ -180,6 +223,10 @@ export default function Dashboard() {
   }, [orders]);
 
   useEffect(() => {
+    localStorage.setItem(OUTBOUND_LOG_STORAGE_KEY, JSON.stringify(outboundLog));
+  }, [outboundLog]);
+
+  useEffect(() => {
     if (!settings.autoRefresh) {
       return;
     }
@@ -194,17 +241,20 @@ export default function Dashboard() {
     setBooks((prev) => [book, ...prev]);
   };
 
-  const removeBookFromState = (id: string) => {
-    setBooks((prev) => prev.filter((book) => book.id !== id));
+  const updateBookInState = (updatedBook: Book) => {
+    setBooks((prev) => prev.map((book) => (book.id === updatedBook.id ? updatedBook : book)));
   };
 
   const stats = useMemo(() => {
     const totalBooks = books.length;
     const categories = new Set(books.map((b) => b.category).filter(Boolean)).size;
     const totalUnits = books.reduce((sum, b) => sum + b.quantity, 0);
-    const totalValue = books.reduce((sum, b) => sum + b.price * b.quantity, 0);
-    return { totalBooks, categories, totalUnits, totalValue };
-  }, [books]);
+    const totalValue = books.reduce((sum, b) => sum + (b.sellingPrice || b.price || 0) * b.quantity, 0);
+    const totalRevenue = outboundLog
+      .filter((entry) => entry.type === "Verkauf")
+      .reduce((sum, entry) => sum + entry.total, 0);
+    return { totalBooks, categories, totalUnits, totalValue, totalRevenue };
+  }, [books, outboundLog]);
 
   const container = dark
     ? "min-h-screen bg-gray-950 text-white"
@@ -247,9 +297,25 @@ export default function Dashboard() {
               dark={dark}
             />
             <MenuButton
+              icon={<Truck size={18} />}
+              label="Wareneingang"
+              value="wareneingang"
+              page={page}
+              setPage={setPage}
+              dark={dark}
+            />
+            <MenuButton
+              icon={<ShoppingBag size={18} />}
+              label="Warenausgang"
+              value="warenausgang"
+              page={page}
+              setPage={setPage}
+              dark={dark}
+            />
+            <MenuButton
               icon={<ShoppingCart size={18} />}
-              label="Bestellungen"
-              value="bestellungen"
+              label="Bestellentwicklung"
+              value="bestellentwicklung"
               page={page}
               setPage={setPage}
               dark={dark}
@@ -286,7 +352,7 @@ export default function Dashboard() {
 
           <div className="p-6">
             {page === "dashboard" && (
-              <DashboardPage card={card} stats={stats} loading={loadingBooks} />
+              <DashboardPage card={card} stats={stats} loading={loadingBooks} outboundLog={outboundLog} />
             )}
             {page === "lager" && (
               <InventoryPage
@@ -296,21 +362,40 @@ export default function Dashboard() {
                 error={bookError}
                 dark={dark}
                 settings={settings}
-                addBookToState={addBookToState}
-                removeBookFromState={removeBookFromState}
+                updateBookInState={updateBookInState}
               />
             )}
-            {page === "reports" && <ReportsPage card={card} />}
-            {page === "bestellungen" && (
-              <OrdersPage
+            {page === "wareneingang" && (
+              <GoodsInPage
                 card={card}
                 dark={dark}
-                orders={orders}
+                addBookToState={addBookToState}
                 setOrders={setOrders}
                 supplier={supplier}
                 supplierStock={supplierStock}
                 supplierLoading={supplierLoading}
                 supplierError={supplierError}
+                reloadBooks={reloadBooks}
+                suppliers={suppliers}
+              />
+            )}
+            {page === "warenausgang" && (
+              <GoodsOutPage
+                card={card}
+                dark={dark}
+                books={books}
+                reloadBooks={reloadBooks}
+                outboundLog={outboundLog}
+                setOutboundLog={setOutboundLog}
+              />
+            )}
+            {page === "reports" && <ReportsPage card={card} />}
+            {page === "bestellentwicklung" && (
+              <OrderDevelopmentPage
+                card={card}
+                dark={dark}
+                orders={orders}
+                setOrders={setOrders}
                 reloadBooks={reloadBooks}
               />
             )}
@@ -328,13 +413,35 @@ function DashboardPage({
   card,
   stats,
   loading,
+  outboundLog,
 }: {
   card: string;
-  stats: { totalBooks: number; categories: number; totalUnits: number; totalValue: number };
+  stats: {
+    totalBooks: number;
+    categories: number;
+    totalUnits: number;
+    totalValue: number;
+    totalRevenue: number;
+  };
   loading: boolean;
+  outboundLog: OutboundEntry[];
 }) {
+  const revenueData = useMemo(() => {
+    const monthlyRevenue: { [key: string]: number } = {};
+    outboundLog
+      .filter((entry) => entry.type === "Verkauf")
+      .forEach((entry) => {
+        const date = new Date(entry.createdAt);
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        monthlyRevenue[monthKey] = (monthlyRevenue[monthKey] || 0) + entry.total;
+      });
+    return Object.entries(monthlyRevenue)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, revenue]) => ({ month, revenue }));
+  }, [outboundLog]);
+
   return (
-    <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
+    <div className="grid grid-cols-1 gap-6 md:grid-cols-5">
       <Card className={card}>
         <CardContent className="p-6">
           <h2 className="text-lg font-semibold">Bücher im Lager</h2>
@@ -364,6 +471,26 @@ function DashboardPage({
           </p>
         </CardContent>
       </Card>
+      <Card className={card}>
+        <CardContent className="p-6">
+          <h2 className="text-lg font-semibold">Umsatz</h2>
+          <p className="mt-2 text-3xl">€{stats.totalRevenue.toFixed(2)}</p>
+        </CardContent>
+      </Card>
+      <Card className={`${card} md:col-span-5`}>
+        <CardContent className="p-6">
+          <h2 className="text-lg font-semibold mb-4">Umsatzentwicklung</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={revenueData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="month" />
+              <YAxis />
+              <Tooltip formatter={(value) => [`€${Number(value).toFixed(2)}`, 'Umsatz']} />
+              <Bar dataKey="revenue" fill="#8884d8" />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -375,8 +502,7 @@ function InventoryPage({
   error,
   dark,
   settings,
-  addBookToState,
-  removeBookFromState,
+  updateBookInState,
 }: {
   card: string;
   books: Book[];
@@ -384,21 +510,25 @@ function InventoryPage({
   error: string | null;
   dark: boolean;
   settings: AppSettings;
-  addBookToState: (book: Book) => void;
-  removeBookFromState: (id: string) => void;
+  updateBookInState: (book: Book) => void;
 }) {
   const [search, setSearch] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [draft, setDraft] = useState<NewBookDraft>({
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingBookId, setEditingBookId] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [editDraft, setEditDraft] = useState<EditBookDraft>({
     name: "",
     author: "",
     description: "",
-    price: "",
+    purchasePrice: "",
+    sellingPrice: "",
     quantity: "",
     sku: "",
     category: "",
+    supplierId: "",
     notes: "",
   });
 
@@ -413,57 +543,75 @@ function InventoryPage({
   const currencySymbol =
     settings.currency === "USD" ? "$" : settings.currency === "CHF" ? "CHF" : "€";
   const rowPaddingClass = settings.compactTable ? "py-1" : "py-2";
-  const formInputClass = dark
+  const modalInputClass = dark
     ? "w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-white placeholder:text-gray-400"
     : "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500";
 
-  const onCreate = async () => {
-    setCreating(true);
-    setCreateError(null);
+  const openEditModal = (book: Book) => {
+    setEditingBookId(book.id);
+    setEditDraft({
+      name: book.name,
+      author: book.author,
+      description: book.description,
+      purchasePrice: String(book.purchasePrice || book.price || 0),
+      sellingPrice: String(book.sellingPrice || book.price || 0),
+      quantity: String(book.quantity),
+      sku: book.sku,
+      category: book.category,
+      supplierId: "",
+      notes: book.notes ?? "",
+    });
+    setEditError(null);
+    setEditOpen(true);
+  };
+
+  const onEditSave = async () => {
+    if (!editingBookId) {
+      return;
+    }
+    setEditing(true);
+    setEditError(null);
     try {
-      const createdBook = await apiPost<Book, Partial<Book>>("/books", {
-        name: draft.name.trim(),
-        author: draft.author.trim(),
-        description: draft.description.trim() || "-",
-        price: Number(draft.price) || 0,
-        quantity: Number(draft.quantity) || 0,
-        sku: draft.sku.trim(),
-        category: draft.category.trim(),
-        notes: draft.notes.trim() || null,
+      const updated = await apiPut<Book, Partial<Book>>(`/books/${editingBookId}`, {
+        id: editingBookId,
+        name: editDraft.name.trim(),
+        author: editDraft.author.trim(),
+        description: editDraft.description.trim() || "-",
+        purchasePrice: Number(editDraft.purchasePrice) || 0,
+        sellingPrice: Number(editDraft.sellingPrice) || 0,
+        quantity: Number(editDraft.quantity) || 0,
+        sku: editDraft.sku.trim(),
+        category: editDraft.category.trim(),
+        notes: editDraft.notes.trim() || null,
       });
-      addBookToState(createdBook);
-      setDraft({
-        name: "",
-        author: "",
-        description: "",
-        price: "",
-        quantity: "",
-        sku: "",
-        category: "",
-        notes: "",
-      });
-      setCreateOpen(false);
+      updateBookInState(updated);
+      setEditOpen(false);
+      setEditingBookId(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unbekannter Fehler";
-      setCreateError(message);
+      setEditError(message);
     } finally {
-      setCreating(false);
+      setEditing(false);
     }
   };
 
-  const onDelete = async (id: string) => {
-    if (settings.confirmDelete) {
-      const confirmed = window.confirm("Moechtest du dieses Buch wirklich loeschen?");
-      if (!confirmed) {
-        return;
-      }
+  const onDelete = async () => {
+    if (!editingBookId) {
+      return;
     }
+    setDeleting(true);
+    setEditError(null);
     try {
-      await apiDelete(`/books/${id}`);
-      removeBookFromState(id);
+      await apiDelete(`/books/${editingBookId}`);
+      setBooks((prev) => prev.filter((book) => book.id !== editingBookId));
+      setEditOpen(false);
+      setEditingBookId(null);
+      setDeleteConfirm(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unbekannter Fehler";
-      setCreateError(message);
+      setEditError(message);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -495,78 +643,97 @@ function InventoryPage({
               onChange={(e) => setSearch(e.target.value)}
             />
             <Button onClick={() => setSearch("")}>Reset</Button>
-            <Button onClick={() => setCreateOpen((v) => !v)} variant="outline">
-              {createOpen ? "Schließen" : "Neues Buch"}
-            </Button>
           </div>
 
-          {createOpen && (
+          {editOpen && (
             <div className={`mb-6 rounded-xl border p-4 ${tableBorder}`}>
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-base font-semibold">Neues Buch anlegen</h3>
-                <Button variant="outline" size="sm" onClick={() => setCreateOpen(false)}>
+                <h3 className="text-base font-semibold">Buch bearbeiten</h3>
+                <Button variant="outline" size="sm" onClick={() => setEditOpen(false)}>
                   X
                 </Button>
               </div>
 
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <input
-                  className={formInputClass}
+                  className={modalInputClass}
                   placeholder="Name *"
-                  value={draft.name}
-                  onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+                  value={editDraft.name}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))}
                 />
                 <input
-                  className={formInputClass}
+                  className={modalInputClass}
                   placeholder="Autor"
-                  value={draft.author}
-                  onChange={(e) => setDraft((d) => ({ ...d, author: e.target.value }))}
+                  value={editDraft.author}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, author: e.target.value }))}
                 />
                 <input
-                  className={formInputClass}
+                  className={modalInputClass}
                   placeholder="Kategorie"
-                  value={draft.category}
-                  onChange={(e) => setDraft((d) => ({ ...d, category: e.target.value }))}
+                  value={editDraft.category}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, category: e.target.value }))}
                 />
                 <input
-                  className={formInputClass}
-                  placeholder="SKU"
-                  value={draft.sku}
-                  onChange={(e) => setDraft((d) => ({ ...d, sku: e.target.value }))}
+                  className={modalInputClass}
+                  placeholder="SKU (Auto-generiert)"
+                  value={editDraft.sku}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, sku: e.target.value }))}
                 />
                 <input
-                  className={formInputClass}
-                  placeholder="Preis (EUR, z.B. 12.99)"
+                  className={modalInputClass}
+                  placeholder="Einkaufspreis (EUR)"
                   inputMode="decimal"
-                  value={draft.price}
-                  onChange={(e) => setDraft((d) => ({ ...d, price: e.target.value }))}
+                  value={editDraft.purchasePrice}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, purchasePrice: e.target.value }))}
                 />
                 <input
-                  className={formInputClass}
-                  placeholder="Bestand (Stück, z.B. 10)"
+                  className={modalInputClass}
+                  placeholder="Verkaufspreis (EUR)"
+                  inputMode="decimal"
+                  value={editDraft.sellingPrice}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, sellingPrice: e.target.value }))}
+                />
+                <input
+                  className={modalInputClass}
+                  placeholder="Bestand (Stück)"
                   inputMode="numeric"
-                  value={draft.quantity}
-                  onChange={(e) => setDraft((d) => ({ ...d, quantity: e.target.value }))}
+                  value={editDraft.quantity}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, quantity: e.target.value }))}
                 />
                 <input
-                  className={formInputClass}
+                  className={`${modalInputClass} md:col-span-2`}
                   placeholder="Beschreibung"
-                  value={draft.description}
-                  onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+                  value={editDraft.description}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, description: e.target.value }))}
                 />
                 <input
-                  className={`${formInputClass} md:col-span-2`}
+                  className={`${modalInputClass} md:col-span-2`}
                   placeholder="Notizen"
-                  value={draft.notes}
-                  onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
+                  value={editDraft.notes}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, notes: e.target.value }))}
                 />
               </div>
 
               <div className="mt-4 flex items-center gap-3">
-                <Button onClick={onCreate} disabled={creating || draft.name.trim().length === 0}>
-                  {creating ? "Speichere…" : "Speichern"}
+                <Button onClick={onEditSave} disabled={editing || editDraft.name.trim().length === 0}>
+                  {editing ? "Speichere..." : "Änderungen speichern"}
                 </Button>
-                {createError && <span className="text-sm text-red-400">{createError}</span>}
+                {!deleteConfirm ? (
+                  <Button variant="destructive" onClick={() => setDeleteConfirm(true)}>
+                    Löschen
+                  </Button>
+                ) : (
+                  <>
+                    <span className="text-sm text-red-400">Wirklich löschen?</span>
+                    <Button variant="destructive" onClick={onDelete} disabled={deleting}>
+                      {deleting ? "Lösche..." : "Ja, löschen"}
+                    </Button>
+                    <Button variant="outline" onClick={() => setDeleteConfirm(false)}>
+                      Abbrechen
+                    </Button>
+                  </>
+                )}
+                {editError && <span className="text-sm text-red-400">{editError}</span>}
               </div>
             </div>
           )}
@@ -584,15 +751,17 @@ function InventoryPage({
                 <tr className={`border-b ${tableBorder} text-xs uppercase ${tableHeadText}`}>
                   <th className="py-2">Buch</th>
                   <th>Kategorie</th>
-                  <th>Preis</th>
+                  <th>Beschreibung</th>
+                  <th>Verkaufspreis</th>
                   <th>Bestand</th>
+                  <th>Notiz</th>
                 </tr>
               </thead>
 
               <tbody>
                 {filteredBooks.length === 0 && (
                   <tr>
-                    <td className={`py-4 ${mutedText}`} colSpan={4}>
+                    <td className={`py-4 ${mutedText}`} colSpan={6}>
                       Keine passenden Bücher vorhanden.
                     </td>
                   </tr>
@@ -610,21 +779,19 @@ function InventoryPage({
                       <div className={`text-xs ${mutedText}`}>{book.sku || "ohne SKU"}</div>
                     </td>
                     <td>{book.category || "-"}</td>
+                    <td className={rowPaddingClass}>{book.description || "-"}</td>
                     <td>
-                      {book.price.toFixed(2)} {currencySymbol}
+                      {(book.sellingPrice || book.price || 0).toFixed(2)} {currencySymbol}
                     </td>
                     <td className={book.quantity <= settings.lowStockThreshold ? lowStockText : ""}>
                       <div className="flex items-center justify-between gap-3">
                         <span>{book.quantity}</span>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => onDelete(book.id)}
-                        >
-                          Löschen
+                        <Button size="sm" variant="outline" onClick={() => openEditModal(book)}>
+                          Bearbeiten
                         </Button>
                       </div>
                     </td>
+                    <td className={rowPaddingClass}>{book.notes || "-"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -692,27 +859,44 @@ function ReportsPage({ card }: { card: string }) {
   );
 }
 
-function OrdersPage({
+function GoodsInPage({
   card,
   dark,
-  orders,
+  addBookToState,
   setOrders,
   supplier,
   supplierStock,
   supplierLoading,
   supplierError,
   reloadBooks,
+  suppliers,
 }: {
   card: string;
   dark: boolean;
-  orders: PurchaseOrder[];
+  addBookToState: (book: Book) => void;
   setOrders: Dispatch<SetStateAction<PurchaseOrder[]>>;
   supplier: Supplier | null;
   supplierStock: SupplierStockEntry[];
   supplierLoading: boolean;
   supplierError: string | null;
   reloadBooks: () => void;
+  suppliers: Supplier[];
 }) {
+  const [createOpen, setCreateOpen] = useState(false);
+  const [creatingBook, setCreatingBook] = useState(false);
+  const [bookError, setBookError] = useState<string | null>(null);
+  const [bookDraft, setBookDraft] = useState<NewBookDraft>({
+    name: "",
+    author: "",
+    description: "",
+    purchasePrice: "",
+    sellingPrice: "",
+    quantity: "",
+    sku: "",
+    category: "",
+    supplierId: "",
+    notes: "",
+  });
   const [draft, setDraft] = useState<NewOrderDraft>({
     supplierId: "",
     name: "",
@@ -738,32 +922,39 @@ function OrdersPage({
     return supplierBooks.find((book) => book.book_name === draft.name.trim()) ?? null;
   }, [supplierBooks, draft.name]);
 
-  const markOrderAsDelivered = async (orderId: string) => {
-    const order = orders.find((entry) => entry.id === orderId);
-    const supplierId = order?.supplierId ?? draft.supplierId;
-    if (!order || order.status === "geliefert" || !supplierId) {
-      return;
-    }
+  const onCreateBook = async () => {
+    setBookError(null);
+    setCreatingBook(true);
     try {
-      await apiPost("/suppliers/" + supplierId + "/order", {
-        book_id: order.bookId,
-        quantity: order.quantity,
-        performed_by: "ui",
+      const createdBook = await apiPost<Book, Partial<Book>>("/books", {
+        name: bookDraft.name.trim(),
+        author: bookDraft.author.trim(),
+        description: bookDraft.description.trim() || "-",
+        purchasePrice: Number(bookDraft.purchasePrice) || 0,
+        sellingPrice: Number(bookDraft.sellingPrice) || 0,
+        quantity: Number(bookDraft.quantity) || 0,
+        sku: bookDraft.sku.trim() || `AUTO-${Date.now()}`,
+        category: bookDraft.category.trim(),
+        notes: bookDraft.notes.trim() || null,
       });
-      setOrders((prev) =>
-        prev.map((entry) =>
-          entry.id === orderId
-            ? {
-                ...entry,
-                status: "geliefert",
-                deliveredAt: new Date().toISOString(),
-              }
-            : entry
-        )
-      );
-      reloadBooks();
+      addBookToState(createdBook);
+      setBookDraft({
+        name: "",
+        author: "",
+        description: "",
+        purchasePrice: "",
+        sellingPrice: "",
+        quantity: "",
+        sku: "",
+        category: "",
+        supplierId: "",
+        notes: "",
+      });
+      setCreateOpen(false);
     } catch (err) {
-      setOrderError(err instanceof Error ? err.message : "Unbekannter Fehler");
+      setBookError(err instanceof Error ? err.message : "Unbekannter Fehler");
+    } finally {
+      setCreatingBook(false);
     }
   };
 
@@ -819,10 +1010,99 @@ function OrdersPage({
     <div className="space-y-6">
       <Card className={card}>
         <CardContent className="space-y-4 p-6">
-          <h2 className="text-xl font-semibold">Bestellungen</h2>
+          <h2 className="text-xl font-semibold">Wareneingang</h2>
+          <div>
+            <Button onClick={() => setCreateOpen((v) => !v)} variant="outline">
+              {createOpen ? "Neues Buch schliessen" : "Neues Buch anlegen"}
+            </Button>
+          </div>
+
+          {createOpen && (
+            <div className={`rounded-xl border p-4 ${tableBorder}`}>
+              <h3 className="mb-3 text-base font-semibold">Neues Buch anlegen</h3>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <input
+                  className={formInputClass}
+                  placeholder="Name *"
+                  value={bookDraft.name}
+                  onChange={(e) => setBookDraft((prev) => ({ ...prev, name: e.target.value }))}
+                />
+                <input
+                  className={formInputClass}
+                  placeholder="Autor"
+                  value={bookDraft.author}
+                  onChange={(e) => setBookDraft((prev) => ({ ...prev, author: e.target.value }))}
+                />
+                <input
+                  className={formInputClass}
+                  placeholder="Kategorie"
+                  value={bookDraft.category}
+                  onChange={(e) => setBookDraft((prev) => ({ ...prev, category: e.target.value }))}
+                />
+                <input
+                  className={formInputClass}
+                  placeholder="SKU (Auto-generiert)"
+                  value={bookDraft.sku}
+                  onChange={(e) => setBookDraft((prev) => ({ ...prev, sku: e.target.value }))}
+                />
+                <input
+                  className={formInputClass}
+                  placeholder="Einkaufspreis"
+                  inputMode="decimal"
+                  value={bookDraft.purchasePrice}
+                  onChange={(e) => setBookDraft((prev) => ({ ...prev, purchasePrice: e.target.value }))}
+                />
+                <input
+                  className={formInputClass}
+                  placeholder="Verkaufspreis"
+                  inputMode="decimal"
+                  value={bookDraft.sellingPrice}
+                  onChange={(e) => setBookDraft((prev) => ({ ...prev, sellingPrice: e.target.value }))}
+                />
+                <input
+                  className={formInputClass}
+                  placeholder="Bestand"
+                  inputMode="numeric"
+                  value={bookDraft.quantity}
+                  onChange={(e) => setBookDraft((prev) => ({ ...prev, quantity: e.target.value }))}
+                />
+                <select
+                  className={formInputClass}
+                  value={bookDraft.supplierId}
+                  onChange={(e) => setBookDraft((prev) => ({ ...prev, supplierId: e.target.value }))}
+                >
+                  <option value="">Lieferant auswählen</option>
+                  {suppliers.map((sup) => (
+                    <option key={sup.id} value={sup.id}>
+                      {sup.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className={`${formInputClass} md:col-span-2`}
+                  placeholder="Beschreibung"
+                  value={bookDraft.description}
+                  onChange={(e) => setBookDraft((prev) => ({ ...prev, description: e.target.value }))}
+                />
+                <input
+                  className={`${formInputClass} md:col-span-2`}
+                  placeholder="Notizen"
+                  value={bookDraft.notes}
+                  onChange={(e) => setBookDraft((prev) => ({ ...prev, notes: e.target.value }))}
+                />
+              </div>
+              <div className="mt-4">
+                <Button onClick={onCreateBook} disabled={creatingBook || bookDraft.name.trim() === ""}>
+                  {creatingBook ? "Speichere..." : "Buch speichern"}
+                </Button>
+                {bookError ? <span className="ml-3 text-sm text-red-400">{bookError}</span> : null}
+              </div>
+            </div>
+          )}
+
           <p className={`text-sm ${mutedText}`}>
-            Waehle einen Lieferanten und ein Buch aus dessen Lager aus. Beim Anlegen wird die Menge
-            sofort in deinen Lagerbestand uebernommen.
+            Wareneingang per Lieferant: Bestellung erfassen und spaeter in Bestellentwicklung
+            einbuchen.
           </p>
 
           <div className={`grid grid-cols-1 gap-3 rounded-xl border p-4 ${tableBorder} md:grid-cols-2`}>
@@ -847,7 +1127,7 @@ function OrdersPage({
               value={
                 selectedSupplierBook
                   ? `Preis: ${selectedSupplierBook.price.toFixed(2)} EUR`
-                  : "Preis: Buch waehlen"
+                  : "Preis: Buch wählen"
               }
               readOnly
             />
@@ -878,14 +1158,14 @@ function OrdersPage({
           </div>
 
           <div className={`rounded-xl border p-4 ${tableBorder}`}>
-            <h3 className="mb-2 text-base font-semibold">Buecher im Lager des Lieferanten</h3>
+            <h3 className="mb-2 text-base font-semibold">Bücher im Lager des Lieferanten</h3>
             {supplierLoading && <p className={`text-sm ${mutedText}`}>Lade Lieferantenlager...</p>}
             {supplierError && <p className="text-sm text-red-400">{supplierError}</p>}
             {!supplierLoading && !supplierError && !supplier && (
               <p className={`text-sm ${mutedText}`}>Kein Lieferant vorhanden.</p>
             )}
             {!supplierLoading && !supplierError && supplier && supplierBooks.length === 0 && (
-              <p className={`text-sm ${mutedText}`}>Fuer diesen Lieferanten sind keine Titel hinterlegt.</p>
+              <p className={`text-sm ${mutedText}`}>Für diesen Lieferanten sind keine Titel hinterlegt.</p>
             )}
             {!supplierLoading && !supplierError && supplierBooks.length > 0 && (
               <ul className="list-disc space-y-1 pl-5 text-sm">
@@ -898,6 +1178,65 @@ function OrdersPage({
             )}
           </div>
 
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function OrderDevelopmentPage({
+  card,
+  dark,
+  orders,
+  setOrders,
+  reloadBooks,
+}: {
+  card: string;
+  dark: boolean;
+  orders: PurchaseOrder[];
+  setOrders: Dispatch<SetStateAction<PurchaseOrder[]>>;
+  reloadBooks: () => void;
+}) {
+  const tableBorder = dark ? "border-gray-800" : "border-gray-200";
+  const tableHeadText = dark ? "text-gray-400" : "text-gray-500";
+  const mutedText = dark ? "text-gray-400" : "text-gray-500";
+  const [orderError, setOrderError] = useState<string | null>(null);
+
+  const markOrderAsDelivered = async (orderId: string) => {
+    const order = orders.find((entry) => entry.id === orderId);
+    const supplierId = order?.supplierId;
+    if (!order || order.status === "geliefert" || !supplierId) {
+      return;
+    }
+    try {
+      await apiPost("/suppliers/" + supplierId + "/order", {
+        book_id: order.bookId,
+        quantity: order.quantity,
+        performed_by: "ui",
+      });
+      setOrders((prev) =>
+        prev.map((entry) =>
+          entry.id === orderId
+            ? {
+                ...entry,
+                status: "geliefert",
+                deliveredAt: new Date().toISOString(),
+              }
+            : entry
+        )
+      );
+      reloadBooks();
+    } catch (err) {
+      setOrderError(err instanceof Error ? err.message : "Unbekannter Fehler");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card className={card}>
+        <CardContent className="space-y-4 p-6">
+          <h2 className="text-xl font-semibold">Bestellentwicklung</h2>
+          {orderError ? <p className="text-sm text-red-400">{orderError}</p> : null}
           <table className="w-full text-left text-sm">
             <thead>
               <tr className={`border-b ${tableBorder} text-xs uppercase ${tableHeadText}`}>
@@ -917,41 +1256,212 @@ function OrdersPage({
                   </td>
                 </tr>
               )}
-              {orders.map((order) => {
-                return (
-                  <tr key={order.id} className={`border-b ${tableBorder} last:border-b-0`}>
-                    <td className="py-2">{order.supplier}</td>
-                    <td>
-                      {order.bookName || "Unbekanntes Buch"}
-                      {order.bookSku ? <span className={`ml-2 text-xs ${mutedText}`}>({order.bookSku})</span> : null}
-                    </td>
-                    <td>{order.unitPrice != null ? `${order.unitPrice.toFixed(2)} EUR` : "-"}</td>
-                    <td>{order.quantity}</td>
-                    <td>
-                      <span
-                        className={
-                          order.status === "geliefert"
-                            ? "rounded-md bg-emerald-700/30 px-2 py-1 text-xs text-emerald-300"
-                            : "rounded-md bg-amber-700/30 px-2 py-1 text-xs text-amber-300"
-                        }
-                      >
-                        {order.status}
-                      </span>
-                    </td>
-                    <td className="text-right">
-                      {order.status === "offen" ? (
-                        <Button size="sm" onClick={() => markOrderAsDelivered(order.id)}>
-                          Als geliefert markieren
-                        </Button>
-                      ) : (
-                        <span className={`text-xs ${mutedText}`}>Bereits eingebucht</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+              {orders.map((order) => (
+                <tr key={order.id} className={`border-b ${tableBorder} last:border-b-0`}>
+                  <td className="py-2">{order.supplier}</td>
+                  <td>{order.bookName || "Unbekanntes Buch"}</td>
+                  <td>{order.unitPrice != null ? `${order.unitPrice.toFixed(2)} EUR` : "-"}</td>
+                  <td>{order.quantity}</td>
+                  <td>
+                    <span
+                      className={
+                        order.status === "geliefert"
+                          ? "rounded-md bg-emerald-700/30 px-2 py-1 text-xs text-emerald-300"
+                          : "rounded-md bg-amber-700/30 px-2 py-1 text-xs text-amber-300"
+                      }
+                    >
+                      {order.status}
+                    </span>
+                  </td>
+                  <td className="text-right">
+                    {order.status === "offen" ? (
+                      <Button size="sm" onClick={() => markOrderAsDelivered(order.id)}>
+                        Als geliefert markieren
+                      </Button>
+                    ) : (
+                      <span className={`text-xs ${mutedText}`}>Bereits eingebucht</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function GoodsOutPage({
+  card,
+  dark,
+  books,
+  reloadBooks,
+  outboundLog,
+  setOutboundLog,
+}: {
+  card: string;
+  dark: boolean;
+  books: Book[];
+  reloadBooks: () => void;
+  outboundLog: OutboundEntry[];
+  setOutboundLog: Dispatch<SetStateAction<OutboundEntry[]>>;
+}) {
+  const [bookId, setBookId] = useState("");
+  const [quantity, setQuantity] = useState("1");
+  const [outboundType, setOutboundType] = useState<OutboundType>("Verkauf");
+  const [sellingPrice, setSellingPrice] = useState("");
+  const [selling, setSelling] = useState(false);
+  const [saleError, setSaleError] = useState<string | null>(null);
+  const [saleSuccess, setSaleSuccess] = useState<string | null>(null);
+  const formInputClass = dark
+    ? "w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-white placeholder:text-gray-400"
+    : "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500";
+  const tableBorder = dark ? "border-gray-800" : "border-gray-200";
+  const tableHeadText = dark ? "text-gray-400" : "text-gray-500";
+  const mutedText = dark ? "text-gray-400" : "text-gray-500";
+  const selectedBook = useMemo(() => books.find((book) => book.id === bookId) ?? null, [books, bookId]);
+
+  useEffect(() => {
+    if (selectedBook) {
+      setSellingPrice(String(selectedBook.sellingPrice || selectedBook.price || 0));
+    } else {
+      setSellingPrice("");
+    }
+  }, [selectedBook]);
+
+  const onSell = async () => {
+    const qty = Number(quantity);
+    const price = Number(sellingPrice);
+    setSaleError(null);
+    setSaleSuccess(null);
+    if (!selectedBook) {
+      setSaleError("Bitte ein Buch auswählen.");
+      return;
+    }
+    if (!Number.isFinite(qty) || qty <= 0) {
+      setSaleError("Bitte eine gültige Menge > 0 eingeben.");
+      return;
+    }
+    if (!Number.isFinite(price) || price < 0) {
+      setSaleError("Bitte einen gültigen Verkaufspreis >= 0 eingeben.");
+      return;
+    }
+    setSelling(true);
+    try {
+      await apiPost("/movements", {
+        book_id: selectedBook.id,
+        book_name: selectedBook.name,
+        quantity_change: Math.round(qty),
+        movement_type: "OUT",
+        reason: outboundType,
+        performed_by: "ui",
+      });
+      const nextEntry: OutboundEntry = {
+        id: `out-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+        bookId: selectedBook.id,
+        bookName: selectedBook.name,
+        type: outboundType,
+        quantity: Math.round(qty),
+        unitPrice: price,
+        total: price * Math.round(qty),
+        createdAt: new Date().toISOString(),
+      };
+      setOutboundLog((prev) => [nextEntry, ...prev]);
+      setSaleSuccess(
+        `${Math.round(qty)} Stk. von "${selectedBook.name}" als ${outboundType.toLowerCase()} gebucht.`
+      );
+      setQuantity("1");
+      reloadBooks();
+    } catch (err) {
+      setSaleError(err instanceof Error ? err.message : "Unbekannter Fehler");
+    } finally {
+      setSelling(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card className={card}>
+        <CardContent className="space-y-4 p-6">
+          <h2 className="text-xl font-semibold">Warenausgang / Verkauf</h2>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <select className={formInputClass} value={bookId} onChange={(e) => setBookId(e.target.value)}>
+              <option value="">Buch aus Lager waehlen</option>
+              {books.map((book) => (
+                <option key={book.id} value={book.id}>
+                  {book.name} ({book.quantity} Stk.)
+                </option>
+              ))}
+            </select>
+            <input
+              className={formInputClass}
+              type="number"
+              min={1}
+              placeholder="Menge"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+            />
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <select
+                className={formInputClass}
+                value={outboundType}
+                onChange={(e) => setOutboundType(e.target.value as OutboundType)}
+              >
+                <option value="Verkauf">Verkauf</option>
+                <option value="Leihe">Leihe</option>
+              </select>
+              <input
+                className={formInputClass}
+                placeholder="Verkaufspreis (EUR)"
+                inputMode="decimal"
+                value={sellingPrice}
+                onChange={(e) => setSellingPrice(e.target.value)}
+              />
+            </div>
+          </div>
+          <div>
+            <Button onClick={onSell} disabled={selling}>
+              {selling ? "Buche Warenausgang..." : "Verkauf buchen"}
+            </Button>
+            {saleError ? <span className="ml-3 text-sm text-red-400">{saleError}</span> : null}
+            {saleSuccess ? <span className="ml-3 text-sm text-emerald-400">{saleSuccess}</span> : null}
+          </div>
+          <div className={`rounded-xl border p-4 ${tableBorder}`}>
+            <h3 className="mb-3 text-base font-semibold">Warenausgang Verlauf</h3>
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className={`border-b ${tableBorder} text-xs uppercase ${tableHeadText}`}>
+                  <th className="py-2">Datum</th>
+                  <th>Buch</th>
+                  <th>Art</th>
+                  <th>Menge</th>
+                  <th>Preis/Stk.</th>
+                  <th>Gesamt</th>
+                </tr>
+              </thead>
+              <tbody>
+                {outboundLog.length === 0 ? (
+                  <tr>
+                    <td className={`py-4 ${mutedText}`} colSpan={6}>
+                      Noch kein Warenausgang gebucht.
+                    </td>
+                  </tr>
+                ) : (
+                  outboundLog.map((entry) => (
+                    <tr key={entry.id} className={`border-b ${tableBorder} last:border-b-0`}>
+                      <td className="py-2">{new Date(entry.createdAt).toLocaleString("de-AT")}</td>
+                      <td>{entry.bookName}</td>
+                      <td>{entry.type}</td>
+                      <td>{entry.quantity}</td>
+                      <td>{entry.unitPrice.toFixed(2)} EUR</td>
+                      <td>{entry.total.toFixed(2)} EUR</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </CardContent>
       </Card>
     </div>
