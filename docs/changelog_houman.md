@@ -48,21 +48,26 @@ Persönliches Changelog für [Houman], Rolle: [Businesslogic]
 
 ---
 
-## [v0.3] - [Datum]
+## [v0.3] - [17.04.2026]
 
 ### Implementiert
-- [Feature/Fix 1]
+- supplier tabelle und lager des suppliers
+- supplier stock bestellen und dass es ins movement tabelle geschrieben wird
+- main update mit inventory und reports und supplie
 
 ### Tests geschrieben
-- [Tests]
+- 
 
 ### Commits
 ```
-- [Commits]
+- 535318268c2233923c05ad71dbea93952760acdd
+- 1e914130ad917caeff298b6c30b850a95916dea4
+- 551381df03a67b0d7038644f4c7f37835c7ca9e6
+- d75617469bccbfb5f549544a07244dc712806061
 ```
 
 ### Mergekonflikt(e)
-- [Konflikte, falls vorhanden]
+- 551381df03a67b0d7038644f4c7f37835c7ca9e6
 
 ---
 
