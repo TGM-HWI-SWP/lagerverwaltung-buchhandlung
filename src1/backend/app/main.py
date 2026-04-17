@@ -83,7 +83,7 @@ def _ensure_default_supplier_data():
             )
 
         # Fehlende Buch-Einträge im Lieferantenlager nachziehen.
-        book_rows = conn.execute(text("SELECT id, price FROM books")).mappings().all()
+        book_rows = conn.execute(text("SELECT id, purchase_price FROM books")).mappings().all()
         for row in book_rows:
             exists = conn.execute(
                 text(
@@ -106,7 +106,7 @@ def _ensure_default_supplier_data():
                         "supplier_id": supplier_id,
                         "book_id": row["id"],
                         "quantity": 9999,
-                        "price": float(row["price"] or 0),
+                        "price": float(row["purchase_price"] or 0),
                     },
                 )
 
