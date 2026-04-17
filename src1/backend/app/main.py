@@ -51,6 +51,69 @@ def _seed_database():
 _seed_database()
 
 
+def _ensure_default_supplier_data():
+    """Stellt sicher, dass ein Standard-Lieferant inkl. Lagerdaten existiert."""
+    supplier_id = "S001"
+    supplier_name = "Buchgrosshandel Wien GmbH"
+    supplier_contact = "kontakt@bgh-wien.at"
+    supplier_address = "Mariahilfer Strasse 100, 1060 Wien"
+    supplier_notes = "Hauptlieferant fuer alle Buecher"
+
+    with engine.begin() as conn:
+        supplier_exists = conn.execute(
+            text("SELECT COUNT(*) FROM suppliers WHERE id = :supplier_id"),
+            {"supplier_id": supplier_id},
+        ).scalar()
+
+        if not supplier_exists:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO suppliers (id, name, contact, address, notes, created_at)
+                    VALUES (:id, :name, :contact, :address, :notes, datetime('now', 'localtime'))
+                    """
+                ),
+                {
+                    "id": supplier_id,
+                    "name": supplier_name,
+                    "contact": supplier_contact,
+                    "address": supplier_address,
+                    "notes": supplier_notes,
+                },
+            )
+
+        # Fehlende Buch-Einträge im Lieferantenlager nachziehen.
+        book_rows = conn.execute(text("SELECT id, price FROM books")).mappings().all()
+        for row in book_rows:
+            exists = conn.execute(
+                text(
+                    """
+                    SELECT COUNT(*) FROM supplier_stock
+                    WHERE supplier_id = :supplier_id AND book_id = :book_id
+                    """
+                ),
+                {"supplier_id": supplier_id, "book_id": row["id"]},
+            ).scalar()
+            if not exists:
+                conn.execute(
+                    text(
+                        """
+                        INSERT INTO supplier_stock (supplier_id, book_id, quantity, price)
+                        VALUES (:supplier_id, :book_id, :quantity, :price)
+                        """
+                    ),
+                    {
+                        "supplier_id": supplier_id,
+                        "book_id": row["id"],
+                        "quantity": 9999,
+                        "price": float(row["price"] or 0),
+                    },
+                )
+
+
+_ensure_default_supplier_data()
+
+
 def _ensure_sqlite_schema():
     if not str(engine.url).startswith("sqlite"):
         return

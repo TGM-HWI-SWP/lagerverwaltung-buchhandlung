@@ -4,6 +4,7 @@ import {
   Sun,
   Moon,
   Package,
+  ShoppingCart,
   BarChart3,
   FileText,
   Settings as SettingsIcon,
@@ -13,7 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { apiDelete, apiGet, apiPost } from "@/api/client";
 
-type PageKey = "dashboard" | "lager" | "reports" | "einstellungen";
+type PageKey = "dashboard" | "lager" | "bestellungen" | "reports" | "einstellungen";
 
 type Book = {
   id: string;
@@ -49,6 +50,40 @@ type AppSettings = {
   autoRefreshSeconds: number;
 };
 
+type OrderStatus = "offen" | "geliefert";
+
+type PurchaseOrder = {
+  id: string;
+  supplierId?: string;
+  supplier: string;
+  bookId: string;
+  bookName: string;
+  bookSku?: string;
+  unitPrice?: number;
+  quantity: number;
+  status: OrderStatus;
+  createdAt: string;
+  deliveredAt?: string;
+};
+
+type NewOrderDraft = {
+  supplierId: string;
+  name: string;
+  quantity: string;
+};
+
+type Supplier = {
+  id: string;
+  name: string;
+};
+
+type SupplierStockEntry = {
+  book_id: string;
+  book_name: string;
+  quantity: number;
+  price: number;
+};
+
 const DEFAULT_SETTINGS: AppSettings = {
   lowStockThreshold: 5,
   currency: "EUR",
@@ -59,13 +94,24 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 const SETTINGS_STORAGE_KEY = "bookmanager.settings";
-
+const ORDERS_STORAGE_KEY = "bookmanager.orders";
 export default function Dashboard() {
   const [dark, setDark] = useState(true);
   const [page, setPage] = useState<PageKey>("dashboard");
   const [books, setBooks] = useState<Book[]>([]);
   const [loadingBooks, setLoadingBooks] = useState(false);
   const [bookError, setBookError] = useState<string | null>(null);
+  const [orders, setOrders] = useState<PurchaseOrder[]>(() => {
+    try {
+      const raw = localStorage.getItem(ORDERS_STORAGE_KEY);
+      if (!raw) {
+        return [];
+      }
+      return JSON.parse(raw) as PurchaseOrder[];
+    } catch {
+      return [];
+    }
+  });
   const [settings, setSettings] = useState<AppSettings>(() => {
     try {
       const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
@@ -81,6 +127,10 @@ export default function Dashboard() {
       return DEFAULT_SETTINGS;
     }
   });
+  const [supplier, setSupplier] = useState<Supplier | null>(null);
+  const [supplierStock, setSupplierStock] = useState<SupplierStockEntry[]>([]);
+  const [supplierLoading, setSupplierLoading] = useState(false);
+  const [supplierError, setSupplierError] = useState<string | null>(null);
 
   const toggleTheme = () => setDark((prev) => !prev);
 
@@ -98,8 +148,36 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
+    const loadSupplierInventory = async () => {
+      setSupplierLoading(true);
+      setSupplierError(null);
+      try {
+        const suppliers = await apiGet<Supplier[]>("/suppliers");
+        const firstSupplier = suppliers[0] ?? null;
+        setSupplier(firstSupplier);
+        if (!firstSupplier) {
+          setSupplierStock([]);
+          return;
+        }
+        const stock = await apiGet<SupplierStockEntry[]>(`/suppliers/${firstSupplier.id}/stock`);
+        setSupplierStock(stock);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unbekannter Fehler";
+        setSupplierError(message);
+      } finally {
+        setSupplierLoading(false);
+      }
+    };
+    loadSupplierInventory();
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
   }, [settings]);
+
+  useEffect(() => {
+    localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(orders));
+  }, [orders]);
 
   useEffect(() => {
     if (!settings.autoRefresh) {
@@ -169,6 +247,14 @@ export default function Dashboard() {
               dark={dark}
             />
             <MenuButton
+              icon={<ShoppingCart size={18} />}
+              label="Bestellungen"
+              value="bestellungen"
+              page={page}
+              setPage={setPage}
+              dark={dark}
+            />
+            <MenuButton
               icon={<FileText size={18} />}
               label="Reports"
               value="reports"
@@ -215,6 +301,19 @@ export default function Dashboard() {
               />
             )}
             {page === "reports" && <ReportsPage card={card} />}
+            {page === "bestellungen" && (
+              <OrdersPage
+                card={card}
+                dark={dark}
+                orders={orders}
+                setOrders={setOrders}
+                supplier={supplier}
+                supplierStock={supplierStock}
+                supplierLoading={supplierLoading}
+                supplierError={supplierError}
+                reloadBooks={reloadBooks}
+              />
+            )}
             {page === "einstellungen" && (
               <SettingsPage card={card} dark={dark} settings={settings} setSettings={setSettings} />
             )}
@@ -587,6 +686,272 @@ function ReportsPage({ card }: { card: string }) {
           <h2 className="mb-2 text-xl font-semibold">Report B</h2>
           <p>Bestandsentwicklung als Grafik anzeigen.</p>
           <Button className="mt-4">Grafik anzeigen</Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function OrdersPage({
+  card,
+  dark,
+  orders,
+  setOrders,
+  supplier,
+  supplierStock,
+  supplierLoading,
+  supplierError,
+  reloadBooks,
+}: {
+  card: string;
+  dark: boolean;
+  orders: PurchaseOrder[];
+  setOrders: Dispatch<SetStateAction<PurchaseOrder[]>>;
+  supplier: Supplier | null;
+  supplierStock: SupplierStockEntry[];
+  supplierLoading: boolean;
+  supplierError: string | null;
+  reloadBooks: () => void;
+}) {
+  const [draft, setDraft] = useState<NewOrderDraft>({
+    supplierId: "",
+    name: "",
+    quantity: "",
+  });
+  const [creating, setCreating] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
+
+  const tableBorder = dark ? "border-gray-800" : "border-gray-200";
+  const tableHeadText = dark ? "text-gray-400" : "text-gray-500";
+  const mutedText = dark ? "text-gray-400" : "text-gray-500";
+  const formInputClass = dark
+    ? "w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-white placeholder:text-gray-400"
+    : "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500";
+  useEffect(() => {
+    if (supplier) {
+      setDraft((prev) => ({ ...prev, supplierId: supplier.id }));
+    }
+  }, [supplier]);
+
+  const supplierBooks = useMemo(() => supplierStock, [supplierStock]);
+  const selectedSupplierBook = useMemo(() => {
+    return supplierBooks.find((book) => book.book_name === draft.name.trim()) ?? null;
+  }, [supplierBooks, draft.name]);
+
+  const markOrderAsDelivered = async (orderId: string) => {
+    const order = orders.find((entry) => entry.id === orderId);
+    const supplierId = order?.supplierId ?? draft.supplierId;
+    if (!order || order.status === "geliefert" || !supplierId) {
+      return;
+    }
+    try {
+      await apiPost("/suppliers/" + supplierId + "/order", {
+        book_id: order.bookId,
+        quantity: order.quantity,
+        performed_by: "ui",
+      });
+      setOrders((prev) =>
+        prev.map((entry) =>
+          entry.id === orderId
+            ? {
+                ...entry,
+                status: "geliefert",
+                deliveredAt: new Date().toISOString(),
+              }
+            : entry
+        )
+      );
+      reloadBooks();
+    } catch (err) {
+      setOrderError(err instanceof Error ? err.message : "Unbekannter Fehler");
+    }
+  };
+
+  const createOrder = async () => {
+    setOrderError(null);
+    setCreating(true);
+    const quantity = Number(draft.quantity);
+    try {
+      if (!supplier || !draft.supplierId) {
+        setOrderError("Bitte Lieferant angeben.");
+        return;
+      }
+      if (!draft.name.trim()) {
+        setOrderError("Bitte Buchtitel angeben.");
+        return;
+      }
+      if (!selectedSupplierBook) {
+        setOrderError("Bitte ein Buch aus dem Lieferantenlager waehlen.");
+        return;
+      }
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        setOrderError("Bitte eine gueltige Bestellmenge > 0 eingeben.");
+        return;
+      }
+
+      const newOrder: PurchaseOrder = {
+        id: `ord-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+        supplierId: draft.supplierId,
+        supplier: supplier.name,
+        bookId: selectedSupplierBook.book_id,
+        bookName: selectedSupplierBook.book_name,
+        bookSku: "",
+        unitPrice: selectedSupplierBook.price,
+        quantity: Math.round(quantity),
+        status: "offen",
+        createdAt: new Date().toISOString(),
+      };
+
+      setOrders((prev) => [newOrder, ...prev]);
+      setDraft({
+        supplierId: supplier.id,
+        name: "",
+        quantity: "",
+      });
+    } catch (err) {
+      setOrderError(err instanceof Error ? err.message : "Unbekannter Fehler");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card className={card}>
+        <CardContent className="space-y-4 p-6">
+          <h2 className="text-xl font-semibold">Bestellungen</h2>
+          <p className={`text-sm ${mutedText}`}>
+            Waehle einen Lieferanten und ein Buch aus dessen Lager aus. Beim Anlegen wird die Menge
+            sofort in deinen Lagerbestand uebernommen.
+          </p>
+
+          <div className={`grid grid-cols-1 gap-3 rounded-xl border p-4 ${tableBorder} md:grid-cols-2`}>
+            <select
+              className={formInputClass}
+              value={supplier?.id ?? ""}
+              onChange={() => null}
+              disabled
+            >
+              <option value={supplier?.id ?? ""}>{supplier?.name ?? "Kein Lieferant gefunden"}</option>
+            </select>
+            <input
+              className={formInputClass}
+              placeholder="Buchtitel aus Lieferantenlager *"
+              value={draft.name}
+              onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value }))}
+              list="supplier-book-list"
+              disabled={!supplier}
+            />
+            <input
+              className={`${formInputClass} ${dark ? "bg-gray-900" : "bg-gray-100"}`}
+              value={
+                selectedSupplierBook
+                  ? `Preis: ${selectedSupplierBook.price.toFixed(2)} EUR`
+                  : "Preis: Buch waehlen"
+              }
+              readOnly
+            />
+            <datalist id="supplier-book-list">
+              {supplierBooks.map((book) => (
+                <option key={book.book_id} value={book.book_name} />
+              ))}
+            </datalist>
+
+            <input
+              className={formInputClass}
+              type="number"
+              min={1}
+              placeholder="Menge"
+              value={draft.quantity}
+              onChange={(e) => setDraft((prev) => ({ ...prev, quantity: e.target.value }))}
+            />
+
+            <div className="md:col-span-2">
+              <Button
+                onClick={createOrder}
+                disabled={creating || !supplier || !draft.name.trim() || supplierBooks.length === 0}
+              >
+                {creating ? "Bestelle..." : "Bestellung anlegen"}
+              </Button>
+              {orderError && <span className="ml-3 text-sm text-red-400">{orderError}</span>}
+            </div>
+          </div>
+
+          <div className={`rounded-xl border p-4 ${tableBorder}`}>
+            <h3 className="mb-2 text-base font-semibold">Buecher im Lager des Lieferanten</h3>
+            {supplierLoading && <p className={`text-sm ${mutedText}`}>Lade Lieferantenlager...</p>}
+            {supplierError && <p className="text-sm text-red-400">{supplierError}</p>}
+            {!supplierLoading && !supplierError && !supplier && (
+              <p className={`text-sm ${mutedText}`}>Kein Lieferant vorhanden.</p>
+            )}
+            {!supplierLoading && !supplierError && supplier && supplierBooks.length === 0 && (
+              <p className={`text-sm ${mutedText}`}>Fuer diesen Lieferanten sind keine Titel hinterlegt.</p>
+            )}
+            {!supplierLoading && !supplierError && supplierBooks.length > 0 && (
+              <ul className="list-disc space-y-1 pl-5 text-sm">
+                {supplierBooks.map((book) => (
+                  <li key={book.book_id}>
+                    {book.book_name} - {book.price.toFixed(2)} EUR
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className={`border-b ${tableBorder} text-xs uppercase ${tableHeadText}`}>
+                <th className="py-2">Lieferant</th>
+                <th>Buch</th>
+                <th>Preis</th>
+                <th>Menge</th>
+                <th>Status</th>
+                <th className="text-right">Aktion</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orders.length === 0 && (
+                <tr>
+                  <td className={`py-4 ${mutedText}`} colSpan={6}>
+                    Noch keine Bestellungen vorhanden.
+                  </td>
+                </tr>
+              )}
+              {orders.map((order) => {
+                return (
+                  <tr key={order.id} className={`border-b ${tableBorder} last:border-b-0`}>
+                    <td className="py-2">{order.supplier}</td>
+                    <td>
+                      {order.bookName || "Unbekanntes Buch"}
+                      {order.bookSku ? <span className={`ml-2 text-xs ${mutedText}`}>({order.bookSku})</span> : null}
+                    </td>
+                    <td>{order.unitPrice != null ? `${order.unitPrice.toFixed(2)} EUR` : "-"}</td>
+                    <td>{order.quantity}</td>
+                    <td>
+                      <span
+                        className={
+                          order.status === "geliefert"
+                            ? "rounded-md bg-emerald-700/30 px-2 py-1 text-xs text-emerald-300"
+                            : "rounded-md bg-amber-700/30 px-2 py-1 text-xs text-amber-300"
+                        }
+                      >
+                        {order.status}
+                      </span>
+                    </td>
+                    <td className="text-right">
+                      {order.status === "offen" ? (
+                        <Button size="sm" onClick={() => markOrderAsDelivered(order.id)}>
+                          Als geliefert markieren
+                        </Button>
+                      ) : (
+                        <span className={`text-xs ${mutedText}`}>Bereits eingebucht</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </CardContent>
       </Card>
     </div>
