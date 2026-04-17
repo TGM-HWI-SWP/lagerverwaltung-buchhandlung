@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
+from app.adapters.sqlalchemy_repositories import next_movement_id
 from app.db.models import Supplier, Book, Movement
 
 
@@ -34,19 +35,6 @@ def get_supplier_stock(db: Session, supplier_id: str) -> list[dict]:
     ]
 
 
-def _next_movement_id(db: Session) -> str:
-    import re
-    ids = db.query(Movement.id).all()
-    max_num = 0
-    for (mid,) in ids:
-        match = re.fullmatch(r"M(\d+)", mid or "")
-        if match:
-            num = int(match.group(1))
-            if num > max_num:
-                max_num = num
-    return f"M{max_num + 1:03d}"
-
-
 def order_from_supplier(
     db: Session,
     supplier_id: str,
@@ -70,9 +58,9 @@ def order_from_supplier(
 
     book.quantity = int(book.quantity) + quantity
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     movement = Movement(
-        id=_next_movement_id(db),
+        id=next_movement_id(db),
         book_id=book.id,
         book_name=book.name,
         quantity_change=quantity,

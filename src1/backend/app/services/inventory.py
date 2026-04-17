@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
+from app.adapters.sqlalchemy_repositories import next_movement_id
 from app.contracts.repositories import BookRepository, MovementRepository
 from app.db.models import Book, Movement
 from app.db.schemas import MovementSchema
@@ -48,10 +48,10 @@ class InventoryService:
             raise ValueError("Bestand kann nicht negativ werden")
 
         payload = movement.model_dump()
-        payload["id"] = movement.id or str(uuid4())
+        payload["id"] = movement.id or next_movement_id(self._db)
         payload["movement_type"] = movement_type
         payload["quantity_change"] = quantity_delta
-        payload["timestamp"] = movement.timestamp or datetime.now(timezone.utc).isoformat()
+        payload["timestamp"] = movement.timestamp or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         payload["book_name"] = movement.book_name or book.name
 
         db_movement = Movement(**payload)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -8,6 +9,19 @@ from sqlalchemy.orm import Session
 from app.contracts.repositories import BookRepository, MovementRepository
 from app.db.models import Book, Movement
 from app.db.schemas import BookSchema, MovementSchema
+
+
+def next_movement_id(db: Session) -> str:
+    """Erzeugt die nächste chronologische M###-ID auf Basis der vorhandenen Movements."""
+    ids = db.query(Movement.id).all()
+    max_num = 0
+    for (mid,) in ids:
+        match = re.fullmatch(r"M(\d+)", mid or "")
+        if match:
+            num = int(match.group(1))
+            if num > max_num:
+                max_num = num
+    return f"M{max_num + 1:03d}"
 
 
 class SqlAlchemyBookRepository(BookRepository):
@@ -71,8 +85,8 @@ class SqlAlchemyMovementRepository(MovementRepository):
 
     def create(self, movement: MovementSchema) -> Movement:
         payload = movement.model_dump()
-        payload["id"] = movement.id or str(uuid4())
-        payload["timestamp"] = movement.timestamp or datetime.now(timezone.utc).isoformat()
+        payload["id"] = movement.id or next_movement_id(self._db)
+        payload["timestamp"] = movement.timestamp or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         db_movement = Movement(**payload)
         self._db.add(db_movement)
         self._db.commit()
