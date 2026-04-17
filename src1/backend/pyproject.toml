@@ -12,6 +12,7 @@ dependencies = [
   "uvicorn[standard]",
   "sqlalchemy",
   "pydantic-settings",
+  "matplotlib",
 ]
 
 [project.optional-dependencies]

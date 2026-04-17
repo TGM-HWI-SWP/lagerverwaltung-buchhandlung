@@ -2,9 +2,17 @@ from pathlib import Path
 
 from fastapi import FastAPI, Depends, HTTPException                             # FastAPI-Framework
 from fastapi.middleware.cors import CORSMiddleware                              # CORS-Middleware
+from fastapi.responses import StreamingResponse                                 # Streaming für PDF
 from sqlalchemy.orm import Session                                              # DB-Session
 from sqlalchemy import func
 from sqlalchemy import inspect, text
+
+import io                                                                       # PDF-Buffer
+from datetime import datetime                                                   # Zeitstempel im PDF
+import matplotlib                                                               # Plot-Library
+matplotlib.use("Agg")                                                           # Headless-Backend
+import matplotlib.pyplot as plt                                                 # Pyplot-API
+from matplotlib.backends.backend_pdf import PdfPages                            # PDF-Export
 
 from app.core.config import settings                                            # App-Konfiguration
 from app.db.models import Base                                                  # DB-Modelle
@@ -171,3 +179,33 @@ def inventory_summary(db: Session = Depends(get_db)):
         "total_units": int(total_units),
         "low_stock_books": [BookSchema.model_validate(book).model_dump() for book in low_stock],
     }
+
+
+@app.get("/reports/inventory-pdf")                                              # PDF-Report
+def inventory_pdf(db: Session = Depends(get_db)):
+    rows = (                                                                    # Bestand pro Kategorie
+        db.query(Book.category, func.coalesce(func.sum(Book.quantity), 0))
+        .group_by(Book.category)
+        .all()
+    )
+    data = [(cat or "Ohne Kategorie", int(qty)) for cat, qty in rows if int(qty) > 0]
+
+    if not data:                                                                # Leerer Bestand
+        data = [("Keine Daten", 1)]
+
+    labels = [d[0] for d in data]                                               # Beschriftungen
+    sizes = [d[1] for d in data]                                                # Werte
+
+    buffer = io.BytesIO()                                                       # PDF im Speicher
+    with PdfPages(buffer) as pdf:
+        fig, ax = plt.subplots(figsize=(8.27, 11.69))                           # A4-Hochformat
+        ax.pie(sizes, labels=labels, autopct="%1.1f%%", startangle=90)          # Kreisdiagramm
+        ax.axis("equal")                                                        # Kreis statt Ellipse
+        timestamp = datetime.now().strftime("%d.%m.%Y %H:%M")
+        fig.suptitle(f"Lagerbestand nach Kategorien\nStand: {timestamp}", fontsize=14)
+        pdf.savefig(fig)                                                        # Seite speichern
+        plt.close(fig)                                                          # Speicher freigeben
+
+    buffer.seek(0)                                                              # Buffer-Anfang
+    headers = {"Content-Disposition": 'attachment; filename="lagerbestand.pdf"'}
+    return StreamingResponse(buffer, media_type="application/pdf", headers=headers)
