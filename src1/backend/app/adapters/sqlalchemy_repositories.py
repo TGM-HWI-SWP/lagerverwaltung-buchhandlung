@@ -4,6 +4,7 @@ import re
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.contracts.repositories import BookRepository, MovementRepository
@@ -127,13 +128,19 @@ class SqlAlchemyBookRepository(BookRepository):
         db_book = self.get(book_id)
         if db_book is None:
             return False
-        (
-            self._db.query(BookSupplier)
-            .filter(BookSupplier.book_id == book_id)
-            .delete(synchronize_session=False)
-        )
-        self._db.delete(db_book)
-        self._db.commit()
+        try:
+            (
+                self._db.query(BookSupplier)
+                .filter(BookSupplier.book_id == book_id)
+                .delete(synchronize_session=False)
+            )
+            self._db.delete(db_book)
+            self._db.commit()
+        except IntegrityError as exc:
+            self._db.rollback()
+            raise ValueError(
+                "Das Buch kann nicht gelöscht werden, weil noch Bewegungen, Bestellungen oder Wareneingänge damit verknüpft sind."
+            ) from exc
         return True
 
 

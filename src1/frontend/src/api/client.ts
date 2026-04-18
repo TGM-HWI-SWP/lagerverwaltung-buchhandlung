@@ -3,10 +3,25 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
+async function getErrorMessage(response: Response): Promise<string> {
+  try {
+    const data = (await response.json()) as { detail?: string };
+    if (typeof data.detail === "string" && data.detail.trim().length > 0) {
+      return data.detail;
+    }
+  } catch {
+    // Ignore JSON parsing errors and fall back to status text.
+  }
+
+  return response.status >= 500
+    ? "Serverfehler. Bitte später noch einmal versuchen."
+    : `API-Fehler: ${response.status}`;
+}
+
 export async function apiGet<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`);
   if (!response.ok) {
-    throw new Error(`API-Fehler: ${response.status}`);
+    throw new Error(await getErrorMessage(response));
   }
   return (await response.json()) as T;
 }
@@ -22,7 +37,7 @@ async function sendJson<TResponse, TBody>(
     body: JSON.stringify(body),
   });
   if (!response.ok) {
-    throw new Error(`API-Fehler: ${response.status}`);
+    throw new Error(await getErrorMessage(response));
   }
   return (await response.json()) as TResponse;
 }
@@ -38,7 +53,6 @@ export function apiPut<TResponse, TBody>(path: string, body: TBody): Promise<TRe
 export async function apiDelete(path: string): Promise<void> {
   const response = await fetch(`${API_BASE_URL}${path}`, { method: "DELETE" });
   if (!response.ok) {
-    throw new Error(`API-Fehler: ${response.status}`);
+    throw new Error(await getErrorMessage(response));
   }
 }
-

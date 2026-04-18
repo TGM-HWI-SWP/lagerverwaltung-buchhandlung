@@ -62,7 +62,6 @@ type EditBookDraft = NewBookDraft;
 
 type AppSettings = {
   lowStockThreshold: number;
-  currency: "EUR" | "USD" | "CHF";
   confirmDelete: boolean;
   compactTable: boolean;
   autoRefresh: boolean;
@@ -156,7 +155,6 @@ type IncomingDeliveryApi = {
 
 const DEFAULT_SETTINGS: AppSettings = {
   lowStockThreshold: 5,
-  currency: "EUR",
   confirmDelete: true,
   compactTable: false,
   autoRefresh: false,
@@ -760,8 +758,6 @@ function InventoryPage({
   const tableBorder = dark ? "border-gray-800" : "border-gray-200";
   const tableHeadText = dark ? "text-gray-400" : "text-gray-500";
   const lowStockText = dark ? "text-amber-300" : "text-amber-700";
-  const currencySymbol =
-    settings.currency === "USD" ? "$" : settings.currency === "CHF" ? "CHF" : "€";
   const rowPaddingClass = settings.compactTable ? "py-1" : "py-2";
   const modalInputClass = dark
     ? "w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-white placeholder:text-gray-400"
@@ -782,6 +778,7 @@ function InventoryPage({
       notes: book.notes ?? "",
     });
     setEditError(null);
+    setDeleteConfirm(false);
     setEditOpen(true);
   };
 
@@ -820,11 +817,22 @@ function InventoryPage({
       setEditingBookId(null);
       setDeleteConfirm(false);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Unbekannter Fehler";
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Das Buch konnte nicht gelöscht werden.";
       setEditError(message);
     } finally {
       setDeleting(false);
     }
+  };
+
+  const startDeleteFlow = async () => {
+    if (settings.confirmDelete) {
+      setDeleteConfirm(true);
+      return;
+    }
+    await onDelete();
   };
 
   const filteredBooks = useMemo(() => {
@@ -861,7 +869,15 @@ function InventoryPage({
             <div className={`mb-6 rounded-xl border p-4 ${tableBorder}`}>
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-base font-semibold">Buch bearbeiten</h3>
-                <Button variant="outline" size="sm" onClick={() => setEditOpen(false)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setEditOpen(false);
+                    setDeleteConfirm(false);
+                    setEditError(null);
+                  }}
+                >
                   X
                 </Button>
               </div>
@@ -931,7 +947,7 @@ function InventoryPage({
                   {editing ? "Speichere..." : "Änderungen speichern"}
                 </Button>
                 {!deleteConfirm ? (
-                  <Button variant="destructive" onClick={() => setDeleteConfirm(true)}>
+                  <Button variant="destructive" onClick={startDeleteFlow}>
                     Löschen
                   </Button>
                 ) : (
@@ -993,7 +1009,7 @@ function InventoryPage({
                     <td>{book.category || "-"}</td>
                     <td className={rowPaddingClass}>{book.description || "-"}</td>
                     <td>
-                      {(book.sellingPrice || book.price || 0).toFixed(2)} {currencySymbol}
+                      €{(book.sellingPrice || book.price || 0).toFixed(2)}
                     </td>
                     <td className={book.quantity <= settings.lowStockThreshold ? lowStockText : ""}>
                       <div className="flex items-center justify-between gap-3">
@@ -2213,23 +2229,6 @@ function SettingsPage({
                 />
               </label>
 
-              <label className={labelClass}>
-                Waehrung
-                <select
-                  className={inputClass}
-                  value={settings.currency}
-                  onChange={(e) =>
-                    setSettings((prev) => ({
-                      ...prev,
-                      currency: e.target.value as AppSettings["currency"],
-                    }))
-                  }
-                >
-                  <option value="EUR">EUR (€)</option>
-                  <option value="USD">USD ($)</option>
-                  <option value="CHF">CHF</option>
-                </select>
-              </label>
             </div>
 
             <label className={`mt-4 flex items-center gap-2 ${labelClass}`}>
@@ -2249,6 +2248,9 @@ function SettingsPage({
 
           <div className={sectionClass}>
             <h3 className="mb-3 font-semibold">Sicherheit und Komfort</h3>
+            <p className={`mb-4 text-sm ${labelClass}`}>
+              Diese Einstellungen wirken direkt auf Lageransicht und Datenaktualisierung.
+            </p>
 
             <label className={`mb-4 flex items-center gap-2 ${labelClass}`}>
               <input
@@ -2261,7 +2263,7 @@ function SettingsPage({
                   }))
                 }
               />
-              Loeschbestaetigung vor dem Entfernen eines Buchs
+              Löschbestätigung vor dem Entfernen eines Buchs
             </label>
 
             <label className={`mb-2 flex items-center gap-2 ${labelClass}`}>
@@ -2275,7 +2277,7 @@ function SettingsPage({
                   }))
                 }
               />
-              Automatisches Aktualisieren der Buchliste
+              Automatisches Aktualisieren der Datenansichten
             </label>
 
             <label className={labelClass}>

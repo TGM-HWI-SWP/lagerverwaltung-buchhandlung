@@ -244,9 +244,12 @@ def update_book(book_id: str, book: BookSchema, db: Session = Depends(get_db)):
 
 @app.delete("/books/{book_id}")                                                 # Buch loeschen
 def delete_book(book_id: str, db: Session = Depends(get_db)):
-    if not books.delete_book(db, book_id):                                      # Nicht gefunden
-        raise HTTPException(status_code=404, detail="Buch nicht gefunden")
-    return {"detail": "Buch gelöscht"}
+    try:
+        if not books.delete_book(db, book_id):                                  # Nicht gefunden
+            raise HTTPException(status_code=404, detail="Buch nicht gefunden")
+        return {"detail": "Buch gelöscht"}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 # ── Movements ──────────────────────────────────────────
