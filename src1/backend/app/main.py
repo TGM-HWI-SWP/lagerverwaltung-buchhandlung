@@ -231,15 +231,21 @@ def read_book(book_id: str, db: Session = Depends(get_db)):
 
 @app.post("/books", response_model=BookSchema, status_code=201)                 # Buch anlegen
 def create_book(book: BookSchema, db: Session = Depends(get_db)):
-    return books.create_book(db, book)
+    try:
+        return books.create_book(db, book)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.put("/books/{book_id}", response_model=BookSchema)                         # Buch aktualisieren
 def update_book(book_id: str, book: BookSchema, db: Session = Depends(get_db)):
-    updated = books.update_book(db, book_id, book)
-    if updated is None:                                                         # Nicht gefunden
-        raise HTTPException(status_code=404, detail="Buch nicht gefunden")
-    return updated
+    try:
+        updated = books.update_book(db, book_id, book)
+        if updated is None:                                                     # Nicht gefunden
+            raise HTTPException(status_code=404, detail="Buch nicht gefunden")
+        return updated
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.delete("/books/{book_id}")                                                 # Buch loeschen

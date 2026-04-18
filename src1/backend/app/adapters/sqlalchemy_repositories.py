@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime
 from uuid import uuid4
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.contracts.repositories import BookRepository, MovementRepository
+from app.core.time import utc_now_iso
 from app.db.models import Book, BookSupplier, Movement
 from app.db.schemas import BookSchema, MovementSchema
 
@@ -37,7 +38,7 @@ def sync_book_supplier_link(
     if not supplier_id:
         return
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = utc_now_iso()
     link = (
         db.query(BookSupplier)
         .filter(BookSupplier.book_id == book_id, BookSupplier.supplier_id == supplier_id)
@@ -81,7 +82,7 @@ class SqlAlchemyBookRepository(BookRepository):
 
     def create(self, book: BookSchema) -> Book:
         payload = book.model_dump()
-        now = datetime.now(timezone.utc).isoformat()
+        now = utc_now_iso()
         payload["id"] = payload.get("id") or str(uuid4())
         payload["created_at"] = payload.get("created_at") or now
         payload["updated_at"] = payload.get("updated_at") or now
@@ -112,7 +113,7 @@ class SqlAlchemyBookRepository(BookRepository):
             if value is not None:
                 setattr(db_book, key, value)
 
-        db_book.updated_at = datetime.now(timezone.utc).isoformat()
+        db_book.updated_at = utc_now_iso()
         sync_book_supplier_link(
             self._db,
             book_id=db_book.id,
@@ -157,7 +158,7 @@ class SqlAlchemyMovementRepository(MovementRepository):
     def create(self, movement: MovementSchema) -> Movement:
         payload = movement.model_dump()
         payload["id"] = movement.id or next_movement_id(self._db)
-        payload["timestamp"] = movement.timestamp or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        payload["timestamp"] = movement.timestamp or utc_now_iso()
         db_movement = Movement(**payload)
         self._db.add(db_movement)
         self._db.commit()

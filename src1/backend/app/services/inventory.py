@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from sqlalchemy.orm import Session
 
 from app.adapters.sqlalchemy_repositories import next_movement_id
 from app.contracts.repositories import BookRepository, MovementRepository
+from app.core.time import utc_now_iso
 from app.db.models import Book, Movement
 from app.db.schemas import MovementSchema
 
@@ -51,13 +50,13 @@ class InventoryService:
         payload["id"] = movement.id or next_movement_id(self._db)
         payload["movement_type"] = movement_type
         payload["quantity_change"] = quantity_delta
-        payload["timestamp"] = movement.timestamp or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        payload["timestamp"] = movement.timestamp or utc_now_iso()
         payload["book_name"] = movement.book_name or book.name
 
         db_movement = Movement(**payload)
 
         book.quantity = next_quantity
-        book.updated_at = datetime.now(timezone.utc).isoformat()
+        book.updated_at = utc_now_iso()
 
         # Ensure atomicity for "movement + book quantity change"
         self._db.add(db_movement)
@@ -73,4 +72,3 @@ class InventoryService:
     def delete_movement(self, movement_id: str) -> bool:
         # Keeping current behavior: delete does NOT re-apply stock deltas.
         return self._movements.delete(movement_id)
-
