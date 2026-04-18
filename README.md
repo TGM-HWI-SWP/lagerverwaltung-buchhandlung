@@ -2,7 +2,7 @@
 
 Eine kleine Buchhandlungsverwaltung mit FastAPI-Backend, SQLite-Datenbank und React-Frontend.
 
-Der aktuelle code liegt unter `src1/`.
+Der aktuelle Produktcode liegt unter `src1/`.
 
 - Backend: `src1/backend`
 - Frontend: `src1/frontend`
@@ -50,7 +50,7 @@ Technischer Stack:
 
 ### Mit Docker
 
-Voraussetzung: Docker & docker compose, on windows via Docker Desktop or just use linux :)
+Voraussetzung: Docker Desktop oder eine lokale Docker-/Compose-Installation
 
 ```bash
 docker compose up --build
@@ -108,6 +108,12 @@ Das Backend verwendet eine einfache Port-Adapter-Struktur:
   SQLAlchemy-Repositories und Persistenzanbindung
 - `app/db/`
   SQLAlchemy-Modelle, Pydantic-Schemas, Session und Seed-SQL
+
+Zusätzlich wurden in der aktuellen Version folgende Dinge verbessert:
+
+- stärkere Request-Validierung über Pydantic v2
+- konsistentere UTC-ISO-Zeitstempel im Backend
+- Lieferanten-, Bestell- und Wareneingangslogik stärker in Services gebündelt
 
 Mehr Details:
 

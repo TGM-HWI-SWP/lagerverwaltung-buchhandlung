@@ -61,12 +61,7 @@ Wichtig:
 
 - `books.py` delegiert an `BooksService`
 - `inventory.py` delegiert an `InventoryService`
-- `suppliers.py` enthält aktuell Lieferanten-, Bestell- und Wareneingangslogik mit DB-Zugriff
-
-Hinweis:
-
-- `suppliers.py` ist momentan funktional, aber etwas breiter als ideal
-- langfristig könnte man Bestellungen und Wareneingänge in eigene Module oder Services auslagern
+- `suppliers.py` delegiert an `SupplierService`
 
 ### `app/services/`
 
@@ -74,12 +69,21 @@ Zentrale Fachlogik:
 
 - `BooksService`
 - `InventoryService`
+- `SupplierService`
 
 Aktuell sitzt die wichtigste Business-Regel im `InventoryService`:
 
 - `IN`, `OUT`, `CORRECTION`
 - Bestand darf nicht negativ werden
 - Bewegung und Bestandsänderung werden zusammen persistiert
+
+Weitere Fachlogik liegt inzwischen im `SupplierService`:
+
+- Lieferanten anlegen
+- Bestellungen anlegen
+- Teillieferungen als Wareneingang erfassen
+- Wareneingänge ins Lager einbuchen
+- Lieferantenbestand und Buch-Lieferanten-Zuordnung pflegen
 
 ### `app/contracts/`
 
@@ -99,6 +103,13 @@ Implementiert die Ports mit SQLAlchemy:
 
 Zusätzlich liegt hier Hilfslogik für ID-Erzeugung und Pflege der Lieferanten-Zuordnung pro Buch.
 
+### `app/core/`
+
+Enthält kleine technische Hilfslogik, aktuell z. B.:
+
+- konsistente UTC-Zeitstempel
+- Normalisierung optionaler ISO-Zeitangaben
+
 ### `app/db/`
 
 Enthält:
@@ -107,6 +118,13 @@ Enthält:
 - Pydantic-Schemas
 - Session/Engine
 - Seed-SQL
+
+Die Pydantic-Schemas übernehmen inzwischen auch einen Teil der Eingabevalidierung:
+
+- leere Pflichtfelder verhindern
+- negative Preise und Mengen abfangen
+- Status-/Typwerte normalisieren
+- Zeitstempel auf ISO-Format vereinheitlichen
 
 Wichtige Dateien:
 
@@ -201,13 +219,13 @@ Frontend / API Client
 ## Aktuelle Schwächen / technische Schulden
 
 - `App.tsx` ist zu groß und enthält zu viele Verantwortlichkeiten
-- Lieferanten-/Bestelllogik liegt teilweise noch direkt in `app/api/suppliers.py`
 - es gibt noch einige Legacy-/Template-Artefakte im Repo-Root
+- Zeitstempel sind in der Datenbank weiterhin als Strings modelliert
 
 ## Empfohlene nächste Schritte
 
 1. Frontend in kleinere Feature-Dateien aufteilen
-2. Lieferanten, Bestellungen und Wareneingänge in eigene Backend-Module/Services verschieben
+2. Datenbank-Zeitfelder mittelfristig auf echte DateTime-/DB-Typen umstellen
 3. Backend-Testabdeckung über reinen Schematest hinaus erweitern
 4. übrige Legacy-/Template-Dateien im Root-Bereich weiter bereinigen
 

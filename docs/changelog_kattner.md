@@ -120,15 +120,49 @@ Persönliches Changelog für Kattner, Rolle: Backend/Integration (FastAPI ↔ Re
 
 ---
 
+## [v0.4] - 2026-04-19
+
+### Implementiert
+- Backend-Validierung deutlich verbessert:
+  - stärkere Pydantic-v2-Validierung in `src1/backend/app/db/schemas.py`
+  - Pflichtfelder, Mengen, Preise und Statuswerte werden früher abgefangen
+  - optionale Zeitfelder werden auf konsistente ISO-UTC-Werte normalisiert
+- Zeitstempel-Handling vereinheitlicht:
+  - neue Hilfslogik in `src1/backend/app/core/time.py`
+  - Backend verwendet konsistenter UTC-ISO-Zeitstempel statt gemischter Formate
+- Schichtentrennung weiter verbessert:
+  - Lieferanten-, Bestell- und Wareneingangslogik in `src1/backend/app/services/suppliers.py` gebündelt
+  - `src1/backend/app/api/suppliers.py` wieder dünner gemacht
+  - `src1/backend/app/api/inventory.py` per gemeinsamer Service-Fabrik bereinigt
+- Kleine UX-/Fehlerverbesserungen im Frontend:
+  - Währungseinstellung entfernt
+  - freundlichere Fehlermeldungen beim Löschen
+  - Löschbestätigung und Datenansicht-Settings sinnvoller gemacht
+
+### Tests geschrieben
+- Keine neuen Tests in dieser Runde (bewusst ausgelassen)
+
+### Commits
+```
+- 89fae0b Improve settings and delete messages
+- 90251c3 Improve backend validation and timestamps
+- acd2c33 Move supplier logic into services
+```
+
+### Mergekonflikt(e)
+- Keine
+
+---
+
 ## Zusammenfassung
 
-**Gesamt implementierte Features:** Backend-CRUD + DB-Session + SQLite + CORS + Root/Health + Inventory-Summary + Service/Adapter-Struktur + persistente Bestell-/Wareneingangslogik + Mehrfach-Lieferanten im DB-Modell + breiter UI-Ausbau fuer Bestellung/Wareneingang/Verkauf/Lieferanten  
-**Gesamt geschriebene Tests:** 1 neuer SQLite-Schematest (aktuell noch nicht separat committed)  
-**Gesamt Commits:** 6 erfasst  
+**Gesamt implementierte Features:** Backend-CRUD + DB-Session + SQLite + CORS + Root/Health + Inventory-Summary + Service/Adapter-Struktur + persistente Bestell-/Wareneingangslogik + Mehrfach-Lieferanten im DB-Modell + breiter UI-Ausbau fuer Bestellung/Wareneingang/Verkauf/Lieferanten + stärkere Validierung und sauberere Service-Grenzen  
+**Gesamt geschriebene Tests:** 1 neuer SQLite-Schematest  
+**Gesamt Commits:** 9 erfasst  
 **Größte Herausforderung:** Datenmodell zwischen Frontend, API und SQLite konsistent weiterentwickeln, ohne den bestehenden `src1`-Flow zu zerbrechen.  
 **Schönste Code-Zeile:** automatische Pflege der Buch-Lieferanten-Zuordnung beim Persistieren statt reiner Einzel-FK-Logik.
 
 ---
 
 **Changelog erstellt von:** Kattner  
-**Letzte Aktualisierung:** 2026-04-18
+**Letzte Aktualisierung:** 2026-04-19

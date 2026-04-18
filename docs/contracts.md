@@ -79,6 +79,21 @@ Services sind keine “Ports” im strengen Sinn, aber die **stabile API** inner
 **Wichtig:** `update_movement` / `delete_movement` passen aktuell den Bestand **nicht** rückwirkend an.
 Wenn das fachlich benötigt ist, wird ein “compensating movements” Ansatz empfohlen.
 
+### SupplierService
+
+**Ort:** `app/services/suppliers.py`
+
+- `list_suppliers()`
+- `get_supplier(supplier_id)`
+- `create_supplier(supplier)`
+- `list_purchase_orders()`
+- `create_purchase_order(order)`
+- `receive_purchase_order(order_id, quantity)`
+- `list_incoming_deliveries()`
+- `book_incoming_delivery(delivery_id, performed_by)`
+- `get_supplier_stock(supplier_id)`
+- `order_from_supplier(supplier_id, order_data)`
+
 ---
 
 ## 4. Datenmodelle (DB + API)
@@ -108,6 +123,7 @@ Wenn das fachlich benötigt ist, wird ein “compensating movements” Ansatz em
   (`purchase_price`, `sell_price`, `supplier_id`) als auch die im Frontend
   verwendeten `camelCase`-Varianten (`purchasePrice`, `sellingPrice`, `supplierId`).
 - Damit bleibt der HTTP-Contract fuer bestehende UI-Komponenten rueckwaertskompatibel.
+- Die Schemas validieren inzwischen auch Pflichtfelder, Mengen, Preise, Statuswerte und ISO-Zeitstempel strenger.
 
 #### Bestell- und Wareneingangs-Contract
 
@@ -144,3 +160,8 @@ Wenn das fachlich benötigt ist, wird ein “compensating movements” Ansatz em
 ### v0.5 (2026-04-18)
 - N:M-Modell `book_suppliers` fuer Mehrfach-Lieferanten ergänzt
 - Kern-Tabellen mit staerkeren Constraints und Indizes abgesichert
+
+### v0.6 (2026-04-19)
+- Request-Validierung in `schemas.py` deutlich ausgebaut
+- UTC-ISO-Zeitstempel im Backend vereinheitlicht
+- Lieferanten-, Bestell- und Wareneingangslogik in `SupplierService` gebündelt
