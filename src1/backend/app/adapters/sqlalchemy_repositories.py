@@ -7,7 +7,7 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from app.contracts.repositories import BookRepository, MovementRepository
-from app.db.models import Book, Movement
+from app.db.models import Book, BookSupplier, Movement
 from app.db.schemas import BookSchema, MovementSchema
 
 
@@ -22,6 +22,50 @@ def next_movement_id(db: Session) -> str:
             if num > max_num:
                 max_num = num
     return f"M{max_num + 1:03d}"
+
+
+def sync_book_supplier_link(
+    db: Session,
+    *,
+    book_id: str,
+    supplier_id: str | None,
+    purchase_price: float | int | None,
+    supplier_sku: str = "",
+) -> None:
+    supplier_id = (supplier_id or "").strip()
+    if not supplier_id:
+        return
+
+    now = datetime.now(timezone.utc).isoformat()
+    link = (
+        db.query(BookSupplier)
+        .filter(BookSupplier.book_id == book_id, BookSupplier.supplier_id == supplier_id)
+        .first()
+    )
+    price = float(purchase_price or 0)
+
+    if link is None:
+        existing_primary = (
+            db.query(BookSupplier)
+            .filter(BookSupplier.book_id == book_id, BookSupplier.is_primary.is_(True))
+            .first()
+        )
+        link = BookSupplier(
+            id=str(uuid4()),
+            book_id=book_id,
+            supplier_id=supplier_id,
+            supplier_sku=supplier_sku or "",
+            is_primary=existing_primary is None,
+            last_purchase_price=price,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(link)
+        return
+
+    link.supplier_sku = supplier_sku or link.supplier_sku or ""
+    link.last_purchase_price = price
+    link.updated_at = now
 
 
 class SqlAlchemyBookRepository(BookRepository):
@@ -43,6 +87,14 @@ class SqlAlchemyBookRepository(BookRepository):
 
         db_book = Book(**payload)
         self._db.add(db_book)
+        self._db.flush()
+        sync_book_supplier_link(
+            self._db,
+            book_id=db_book.id,
+            supplier_id=db_book.supplier_id,
+            purchase_price=db_book.purchase_price,
+            supplier_sku=db_book.sku or "",
+        )
         self._db.commit()
         self._db.refresh(db_book)
         return db_book
@@ -60,6 +112,13 @@ class SqlAlchemyBookRepository(BookRepository):
                 setattr(db_book, key, value)
 
         db_book.updated_at = datetime.now(timezone.utc).isoformat()
+        sync_book_supplier_link(
+            self._db,
+            book_id=db_book.id,
+            supplier_id=db_book.supplier_id,
+            purchase_price=db_book.purchase_price,
+            supplier_sku=db_book.sku or "",
+        )
         self._db.commit()
         self._db.refresh(db_book)
         return db_book
@@ -68,6 +127,11 @@ class SqlAlchemyBookRepository(BookRepository):
         db_book = self.get(book_id)
         if db_book is None:
             return False
+        (
+            self._db.query(BookSupplier)
+            .filter(BookSupplier.book_id == book_id)
+            .delete(synchronize_session=False)
+        )
         self._db.delete(db_book)
         self._db.commit()
         return True
@@ -115,4 +179,3 @@ class SqlAlchemyMovementRepository(MovementRepository):
         self._db.delete(db_movement)
         self._db.commit()
         return True
-
