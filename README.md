@@ -1,44 +1,90 @@
-# Lagerverwaltung – Buchhandlung (FastAPI + React)
+# Lagerverwaltung Buchhandlung
 
-Dieses Repository implementiert eine einfache **Buchhandlungs-Lagerverwaltung**:
+Eine kleine Buchhandlungsverwaltung mit FastAPI-Backend, SQLite-Datenbank und React-Frontend.
 
-- **Backend**: FastAPI + SQLAlchemy + SQLite (`src1/backend/`)
-- **Frontend**: Vite + React (`src1/frontend/`)
+Der aktuelle code liegt unter `src1/`.
 
-Die Doku unter `docs/` ist auf das aktuelle `src1/` Setup angepasst.
+- Backend: `src1/backend`
+- Frontend: `src1/frontend`
+- Dokumentation: `docs/`
 
-## Quickstart (Docker)
+## Überblick
 
-Voraussetzung: Docker Desktop.
+Die Anwendung deckt die wichtigsten Abläufe einer Buchhandlung ab:
+
+- Bücher verwalten
+- Lagerbestand einsehen
+- Lagerbewegungen buchen
+- Lieferanten verwalten
+- Bestellungen erfassen
+- Wareneingänge einbuchen
+- Verkäufe und Retouren erfassen
+- einfachen PDF-Report erzeugen
+
+Technischer Stack:
+
+- Backend: FastAPI, SQLAlchemy, SQLite
+- Frontend: React, Vite, TypeScript
+- Diagramme/UI: Recharts, Tailwind
+
+## Projektstruktur
+
+```text
+.
+├── src1/
+│   ├── backend/
+│   │   ├── app/
+│   │   │   ├── api/
+│   │   │   ├── adapters/
+│   │   │   ├── contracts/
+│   │   │   ├── db/
+│   │   │   └── services/
+│   │   └── tests/
+│   └── frontend/
+│       └── src/
+├── docs/
+└── docker-compose.yml
+```
+
+## Quickstart
+
+### Mit Docker
+
+Voraussetzung: Docker & docker compose, on windows via Docker Desktop or just use linux :)
 
 ```bash
 docker compose up --build
 ```
 
-- Backend: `http://localhost:8000` (OpenAPI: `http://localhost:8000/docs`)
+Danach erreichbar:
+
 - Frontend: `http://localhost:5173`
+- Backend: `http://localhost:8000`
+- OpenAPI Docs: `http://localhost:8000/docs`
 
-## Lokales Setup (ohne Docker)
+### Lokal ohne Docker
 
-### Backend
+#### Backend starten
 
-Voraussetzung: Python >= 3.11
+Voraussetzung: Python 3.11 oder neuer
 
 ```bash
 cd src1/backend
 python -m venv .venv
-# Windows:
-.venv\Scripts\activate
-# macOS/Linux:
 source .venv/bin/activate
-
 pip install -e .
 uvicorn app.main:app --reload --port 8000
 ```
 
-### Frontend
+Windows:
 
-Voraussetzung: Node.js (LTS empfohlen)
+```bash
+.venv\Scripts\activate
+```
+
+#### Frontend starten
+
+Voraussetzung: Node.js LTS
 
 ```bash
 cd src1/frontend
@@ -46,48 +92,129 @@ npm install
 npm run dev
 ```
 
-## Architektur (Backend)
+## Architektur
 
-Das Backend folgt einer pragmatischen Port-Adapter-Struktur:
+Das Backend verwendet eine einfache Port-Adapter-Struktur:
 
-- **HTTP/API Layer**: `app/main.py` + `app/api/*` (dünn)
-- **Services (Use-Cases)**: `app/services/*` (fachliche Regeln)
-- **Contracts (Ports)**: `app/contracts/*` (Interfaces/Protocols)
-- **Adapters**: `app/adapters/*` (SQLAlchemy-Repositories)
-- **DB**: `app/db/*` (Models/Schemas/Session)
+- `app/main.py`
+  FastAPI-App und HTTP-Endpunkte
+- `app/api/`
+  dünne API-Schicht
+- `app/services/`
+  fachliche Logik und Regeln
+- `app/contracts/`
+  Ports/Interfaces
+- `app/adapters/`
+  SQLAlchemy-Repositories und Persistenzanbindung
+- `app/db/`
+  SQLAlchemy-Modelle, Pydantic-Schemas, Session und Seed-SQL
 
-Details siehe `docs/architecture.md` und `docs/contracts.md`.
+Mehr Details:
 
-## API – wichtigste Endpunkte
+- [docs/architecture.md](/home/smooth/code-projects/lagerverwaltung-buchhandlung/docs/architecture.md)
+- [docs/contracts.md](/home/smooth/code-projects/lagerverwaltung-buchhandlung/docs/contracts.md)
 
-- **Books**
-  - `GET /books`
-  - `GET /books/{book_id}`
-  - `POST /books`
-  - `PUT /books/{book_id}`
-  - `DELETE /books/{book_id}`
+## Datenmodell
 
-- **Movements**
-  - `GET /movements`
-  - `GET /movements/{movement_id}`
-  - `POST /movements`
-  - `PUT /movements/{movement_id}`
-  - `DELETE /movements/{movement_id}`
+Die wichtigsten Tabellen sind:
 
-- **Inventory**
-  - `GET /inventory` (Summary: Titel, Einheiten, Low-Stock Liste)
+- `books`
+- `suppliers`
+- `book_suppliers`
+- `movements`
+- `purchase_orders`
+- `incoming_deliveries`
+
+Wichtig:
+
+- `books.supplier_id` bleibt für bestehende UI-Flows als primärer oder zuletzt genutzter Lieferant erhalten
+- `book_suppliers` bildet die eigentliche N:M-Zuordnung zwischen Büchern und Lieferanten ab
+- Bestellungen und Wareneingänge werden persistent in der Datenbank gespeichert
+
+Das Seed-SQL liegt in:
+
+- [src1/backend/app/db/buchhadlung.sql](/home/smooth/code-projects/lagerverwaltung-buchhandlung/src1/backend/app/db/buchhadlung.sql)
+
+## Wichtige Endpunkte
+
+### Bücher
+
+- `GET /books`
+- `GET /books/{book_id}`
+- `POST /books`
+- `PUT /books/{book_id}`
+- `DELETE /books/{book_id}`
+
+### Lagerbewegungen
+
+- `GET /movements`
+- `GET /movements/{movement_id}`
+- `POST /movements`
+- `PUT /movements/{movement_id}`
+- `DELETE /movements/{movement_id}`
+
+### Inventar und Reports
+
+- `GET /inventory`
+- `GET /reports/inventory-pdf`
+
+### Lieferanten
+
+- `GET /suppliers`
+- `GET /suppliers/{supplier_id}`
+- `POST /suppliers`
+- `GET /suppliers/{supplier_id}/stock`
+- `POST /suppliers/{supplier_id}/order`
+
+### Bestellungen und Wareneingänge
+
+- `GET /purchase-orders`
+- `POST /purchase-orders`
+- `POST /purchase-orders/{order_id}/receive`
+- `GET /incoming-deliveries`
+- `POST /incoming-deliveries/{delivery_id}/book`
 
 ## Tests
 
-Siehe `docs/tests.md`.
+Der neue Backend-Schematest läuft ohne zusätzliche Test-Tools mit `unittest`.
+
+Vom Repo-Root:
+
+```bash
+python -m unittest -q src1.backend.tests.test_sqlite_schema
+```
+
+Oder aus dem Backend-Ordner:
+
+```bash
+cd src1/backend
+python -m unittest -q tests.test_sqlite_schema
+```
+
+Der Test prüft unter anderem:
+
+- frisches Erzeugen des SQLite-Schemas
+- Seed-Daten
+- `book_suppliers` für Mehrfach-Lieferanten
+- wichtige Constraints
+
+Weitere Hinweise:
+
+- [docs/tests.md](/home/smooth/code-projects/lagerverwaltung-buchhandlung/docs/tests.md)
+
+## Entwicklungshinweise
+
+- Der produktive Projektstand liegt in `src1/`
+- Für neue Produktarbeit sollte in der Regel nur unter `src1/` gearbeitet werden
 
 ## Dokumentation
 
-- `docs/architecture.md` – Architektur
-- `docs/contracts.md` – Contracts/Ports
-- `docs/tests.md` – Teststrategie
-- `docs/known_issues.md` – bekannte Probleme
+- [docs/architecture.md](/home/smooth/code-projects/lagerverwaltung-buchhandlung/docs/architecture.md)
+- [docs/contracts.md](/home/smooth/code-projects/lagerverwaltung-buchhandlung/docs/contracts.md)
+- [docs/tests.md](/home/smooth/code-projects/lagerverwaltung-buchhandlung/docs/tests.md)
+- [docs/known_issues.md](/home/smooth/code-projects/lagerverwaltung-buchhandlung/docs/known_issues.md)
+- [docs/changelog_kattner.md](/home/smooth/code-projects/lagerverwaltung-buchhandlung/docs/changelog_kattner.md)
 
 ## Lizenz
 
-Schulprojekt – TGM
+Schulprojekt im Rahmen der TGM.

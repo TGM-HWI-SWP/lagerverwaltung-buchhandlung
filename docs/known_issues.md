@@ -1,53 +1,64 @@
 # Known Issues
 
-## Aktuelle Probleme
+## Aktueller Stand
 
-### Kritisch
-- [ ] Keine kritischen Issues momentan
+Derzeit sind keine akuten Blocker dokumentiert.
 
-### Hoch
-- [ ] [Issue 1 - Beschreibung, Workaround]
-- [ ] [Issue 2 - Beschreibung, Workaround]
+Die Anwendung ist für ein Schulprojekt in einem brauchbaren Zustand, hat aber einige bekannte technische Schulden und Grenzen.
 
-### Mittel
-- [ ] [Issue 1 - Beschreibung]
-- [ ] [Issue 2 - Beschreibung]
+## Bekannte Schwachstellen
 
-### Niedrig
-- [ ] GUI-Styling könnte verbessert werden
-- [ ] [Weitere...]
+### 1. Große zentrale Frontend-Datei
+
+- `src1/frontend/src/App.tsx` ist inzwischen sehr umfangreich
+- mehrere Verantwortlichkeiten liegen noch in einer Datei
+- das erschwert Wartung, Review und gezielte UI-Tests
+
+### 2. Teilweise breite API-Module
+
+- Lieferanten-, Bestell- und Wareneingangslogik liegt aktuell stark in `src1/backend/app/api/suppliers.py`
+- fachlich wäre eine stärkere Trennung in eigene Service-/API-Module sauberer
+
+### 3. Movements werden beim Update/Löschen nicht fachlich neu verrechnet
+
+- `update_movement` und `delete_movement` passen den Lagerbestand aktuell nicht rückwirkend an
+- das Verhalten ist dokumentiert, aber fachlich limitiert
+
+### 4. Root-Repo enthält noch Legacy-Artefakte
+
+- im Root-Bereich liegen noch ältere Template-Dateien und alte Tests
+- sie sind nicht Teil des aktuellen `src1`-Produktkerns
+- dadurch wirkt das Repo stellenweise redundanter als nötig
+
+## Bewusste Limitationen
+
+Diese Dinge sind derzeit nicht umgesetzt:
+
+- Benutzerverwaltung oder Authentifizierung
+- Rollen-/Rechtesystem
+- Pagination oder größere Listenoptimierung
+- Postgres oder andere produktionsnahe DB statt SQLite
+- ausgebaute automatisierte Frontend-Tests
+
+## Workarounds / Hinweise
+
+### Für Entwicklung
+
+- produktive Arbeit nur unter `src1/`
+
+### Für Persistenz
+
+- SQLite ist für das Projekt ausreichend
+- für größere Datenmengen oder parallele Nutzung wäre eine robustere DB sinnvoll
+
+## Empfohlene Bereinigung
+
+Wenn das Repo noch sauberer werden soll, wären diese Schritte sinnvoll:
+
+1. alte Template-Dateien im Root-Bereich weiter reduzieren
+2. `App.tsx` in Feature-Komponenten zerlegen
+3. Lieferanten-/Bestelllogik im Backend weiter entkoppeln
 
 ---
 
-## Gelöste Issues (Archiv)
-
-### v0.1
-- ✓ Anfangsproblem bei Repository-Erstellung
-
-### v0.2
-- ✓ [Issue] gelöst durch [Lösung]
-
----
-
-## Bekannte Limitationen
-
-### Features, die absichtlich nicht implementiert sind
-- Benutzer-Authentifizierung (v0.1)
-- Grafische Reports (Roadmap)
-- Mehrsprachigkeit
-
-### Performance-Limitationen
-- Keine Pagination implementiert (bei sehr vielen Büchern relevant)
-- SQLite ist für sehr große Datenmengen begrenzt (Roadmap: Postgres)
-
----
-
-## Workarounds
-
-### Issue: [Beschreibung]
-**Workaround:** [Beschreibung des Workarounds]
-
----
-
-**Letzte Aktualisierung:** 2025-01-20
-**Hinweis:** Backend nutzt aktuell SQLite Persistenz (`src1/backend/app/db`).
+**Letzte Aktualisierung:** 2026-04-19
