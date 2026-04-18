@@ -6,41 +6,29 @@ from app.db.schemas import MovementSchema
 from app.services.inventory import InventoryService
 
 
-def get_all_movements(db: Session) -> list[Movement]:
+def _service(db: Session) -> InventoryService:
     return InventoryService(
         db=db,
         books=SqlAlchemyBookRepository(db),
         movements=SqlAlchemyMovementRepository(db),
-    ).list_movements()
+    )
+
+
+def get_all_movements(db: Session) -> list[Movement]:
+    return _service(db).list_movements()
 
 
 def get_movement(db: Session, movement_id: str) -> Movement | None:
-    return InventoryService(
-        db=db,
-        books=SqlAlchemyBookRepository(db),
-        movements=SqlAlchemyMovementRepository(db),
-    ).get_movement(movement_id)
+    return _service(db).get_movement(movement_id)
 
 
 def create_movement(db: Session, movement: MovementSchema) -> Movement:
-    return InventoryService(
-        db=db,
-        books=SqlAlchemyBookRepository(db),
-        movements=SqlAlchemyMovementRepository(db),
-    ).create_movement(movement)
+    return _service(db).create_movement(movement)
 
 
 def update_movement(db: Session, movement_id: str, movement: MovementSchema) -> Movement | None:
-    return InventoryService(
-        db=db,
-        books=SqlAlchemyBookRepository(db),
-        movements=SqlAlchemyMovementRepository(db),
-    ).update_movement(movement_id, movement)
+    return _service(db).update_movement(movement_id, movement)
 
 
 def delete_movement(db: Session, movement_id: str) -> bool:
-    return InventoryService(
-        db=db,
-        books=SqlAlchemyBookRepository(db),
-        movements=SqlAlchemyMovementRepository(db),
-    ).delete_movement(movement_id)
+    return _service(db).delete_movement(movement_id)
