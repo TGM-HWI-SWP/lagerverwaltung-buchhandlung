@@ -1,4 +1,5 @@
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import FastAPI, Depends, HTTPException                             # FastAPI-Framework
 from fastapi.middleware.cors import CORSMiddleware                              # CORS-Middleware
@@ -24,6 +25,10 @@ from app.db.schemas import (                                                    
     SupplierSchema,
     SupplierStockEntry,
     SupplierOrderRequest,
+    PurchaseOrderSchema,
+    ReceivePurchaseOrderRequest,
+    IncomingDeliverySchema,
+    BookIncomingDeliveryRequest,
 )
 from app.api import books, inventory, suppliers                                 # CRUD-Logik
 
@@ -31,24 +36,99 @@ from app.api import books, inventory, suppliers                                 
 Base.metadata.create_all(bind=engine)                                           # Tabellen erstellen
 
 
-def _seed_database():
-    """Fügt Testdaten ein, wenn die Datenbank leer ist."""
-    sql_file = Path(__file__).parent / "db" / "buchhadlung.sql"
-    if not sql_file.exists():
+def _ensure_sqlite_schema():
+    if not str(engine.url).startswith("sqlite"):
         return
-    with engine.connect() as conn:
-        book_count = conn.execute(text("SELECT COUNT(*) FROM books")).scalar()
-        if book_count and book_count > 0:
+
+    with engine.begin() as conn:
+        inspector = inspect(conn)
+        if "books" not in inspector.get_table_names():
             return
-        sql = sql_file.read_text(encoding="utf-8")
-        for statement in sql.split(";"):
-            stmt = statement.strip()
-            if stmt:
-                conn.execute(text(stmt))
-        conn.commit()
 
+        book_columns = {col["name"] for col in inspector.get_columns("books")}
+        if "author" not in book_columns:
+            conn.execute(text("ALTER TABLE books ADD COLUMN author VARCHAR DEFAULT '' NOT NULL"))
 
-_seed_database()
+        table_names = set(inspector.get_table_names())
+        if "book_suppliers" not in table_names:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE book_suppliers (
+                        id VARCHAR PRIMARY KEY,
+                        book_id VARCHAR NOT NULL,
+                        supplier_id VARCHAR NOT NULL,
+                        supplier_sku VARCHAR NOT NULL DEFAULT '',
+                        is_primary BOOLEAN NOT NULL DEFAULT 0,
+                        last_purchase_price NUMERIC(10, 2) NOT NULL DEFAULT 0,
+                        created_at VARCHAR NOT NULL,
+                        updated_at VARCHAR NOT NULL,
+                        CONSTRAINT uq_book_suppliers_book_supplier UNIQUE (book_id, supplier_id),
+                        FOREIGN KEY(book_id) REFERENCES books (id),
+                        FOREIGN KEY(supplier_id) REFERENCES suppliers (id),
+                        CONSTRAINT ck_book_suppliers_last_price_non_negative CHECK (last_purchase_price >= 0)
+                    )
+                    """
+                )
+            )
+
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_books_supplier_id ON books (supplier_id)"))
+        conn.execute(
+            text("CREATE UNIQUE INDEX IF NOT EXISTS ix_books_sku_non_empty ON books (sku) WHERE sku <> ''")
+        )
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_movements_book_id ON movements (book_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_purchase_orders_supplier_id ON purchase_orders (supplier_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_purchase_orders_book_id ON purchase_orders (book_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_incoming_deliveries_order_id ON incoming_deliveries (order_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_incoming_deliveries_book_id ON incoming_deliveries (book_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_book_suppliers_supplier_id ON book_suppliers (supplier_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_book_suppliers_book_id ON book_suppliers (book_id)"))
+
+        rows = conn.execute(
+            text(
+                """
+                SELECT id, supplier_id, sku, purchase_price, created_at, updated_at
+                FROM books
+                WHERE supplier_id IS NOT NULL AND supplier_id <> ''
+                """
+            )
+        ).fetchall()
+        for row in rows:
+            existing = conn.execute(
+                text(
+                    """
+                    SELECT 1
+                    FROM book_suppliers
+                    WHERE book_id = :book_id AND supplier_id = :supplier_id
+                    """
+                ),
+                {"book_id": row.id, "supplier_id": row.supplier_id},
+            ).fetchone()
+            if existing:
+                continue
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO book_suppliers (
+                        id, book_id, supplier_id, supplier_sku, is_primary,
+                        last_purchase_price, created_at, updated_at
+                    )
+                    VALUES (
+                        :id, :book_id, :supplier_id, :supplier_sku, 1,
+                        :last_purchase_price, :created_at, :updated_at
+                    )
+                    """
+                ),
+                {
+                    "id": str(uuid4()),
+                    "book_id": row.id,
+                    "supplier_id": row.supplier_id,
+                    "supplier_sku": row.sku or "",
+                    "last_purchase_price": row.purchase_price,
+                    "created_at": row.created_at,
+                    "updated_at": row.updated_at,
+                },
+            )
 
 
 def _ensure_default_supplier_data():
@@ -82,25 +162,26 @@ def _ensure_default_supplier_data():
                 },
             )
 
-
-_ensure_default_supplier_data()
-
-
-def _ensure_sqlite_schema():
-    if not str(engine.url).startswith("sqlite"):
+def _seed_database():
+    """Fügt Testdaten ein, wenn die Datenbank leer ist."""
+    sql_file = Path(__file__).parent / "db" / "buchhadlung.sql"
+    if not sql_file.exists():
         return
-
-    inspector = inspect(engine)
-    if "books" not in inspector.get_table_names():
-        return
-
-    book_columns = {col["name"] for col in inspector.get_columns("books")}
-    if "author" not in book_columns:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE books ADD COLUMN author VARCHAR DEFAULT '' NOT NULL"))
+    with engine.connect() as conn:
+        book_count = conn.execute(text("SELECT COUNT(*) FROM books")).scalar()
+        if book_count and book_count > 0:
+            return
+        sql = sql_file.read_text(encoding="utf-8")
+        for statement in sql.split(";"):
+            stmt = statement.strip()
+            if stmt:
+                conn.execute(text(stmt))
+        conn.commit()
 
 
 _ensure_sqlite_schema()
+_seed_database()
+_ensure_default_supplier_data()
 
 app = FastAPI(title=settings.app_name)                                          # App-Instanz
 
@@ -273,6 +354,11 @@ def read_supplier(supplier_id: str, db: Session = Depends(get_db)):
     return supplier
 
 
+@app.post("/suppliers", response_model=SupplierSchema, status_code=201)         # Lieferant anlegen
+def create_supplier(supplier: SupplierSchema, db: Session = Depends(get_db)):
+    return suppliers.create_supplier(db, supplier)
+
+
 @app.get("/suppliers/{supplier_id}/stock", response_model=list[SupplierStockEntry])  # Lager des Lieferanten
 def read_supplier_stock(supplier_id: str, db: Session = Depends(get_db)):
     if suppliers.get_supplier(db, supplier_id) is None:                         # Existenz pruefen
@@ -296,3 +382,49 @@ def order_from_supplier(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/purchase-orders", response_model=list[PurchaseOrderSchema])
+def read_purchase_orders(db: Session = Depends(get_db)):
+    return suppliers.get_all_purchase_orders(db)
+
+
+@app.post("/purchase-orders", response_model=PurchaseOrderSchema, status_code=201)
+def create_purchase_order(order: PurchaseOrderSchema, db: Session = Depends(get_db)):
+    try:
+        return suppliers.create_purchase_order(db, order)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/purchase-orders/{order_id}/receive", response_model=IncomingDeliverySchema, status_code=201)
+def receive_purchase_order(
+    order_id: str,
+    payload: ReceivePurchaseOrderRequest,
+    db: Session = Depends(get_db),
+):
+    try:
+        return suppliers.receive_purchase_order(db, order_id, payload.quantity)
+    except ValueError as exc:
+        detail = str(exc)
+        status = 404 if "nicht gefunden" in detail else 400
+        raise HTTPException(status_code=status, detail=detail) from exc
+
+
+@app.get("/incoming-deliveries", response_model=list[IncomingDeliverySchema])
+def read_incoming_deliveries(db: Session = Depends(get_db)):
+    return suppliers.get_all_incoming_deliveries(db)
+
+
+@app.post("/incoming-deliveries/{delivery_id}/book", response_model=MovementSchema, status_code=201)
+def book_incoming_delivery(
+    delivery_id: str,
+    payload: BookIncomingDeliveryRequest,
+    db: Session = Depends(get_db),
+):
+    try:
+        return suppliers.book_incoming_delivery(db, delivery_id, payload.performed_by)
+    except ValueError as exc:
+        detail = str(exc)
+        status = 404 if "nicht gefunden" in detail else 400
+        raise HTTPException(status_code=status, detail=detail) from exc

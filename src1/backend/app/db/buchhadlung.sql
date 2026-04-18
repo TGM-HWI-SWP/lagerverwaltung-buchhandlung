@@ -4,9 +4,10 @@
 CREATE TABLE IF NOT EXISTS books (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
+    author TEXT NOT NULL DEFAULT '',
     description TEXT NOT NULL,
-    purchase_price REAL NOT NULL CHECK (purchase_price >= 0),
-    sell_price REAL NOT NULL CHECK (sell_price >= 0),
+    purchase_price NUMERIC NOT NULL CHECK (purchase_price >= 0),
+    sell_price NUMERIC NOT NULL CHECK (sell_price >= 0),
     quantity INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0),
     sku TEXT DEFAULT '',
     category TEXT DEFAULT '',
@@ -39,6 +40,62 @@ CREATE TABLE IF NOT EXISTS suppliers (
     notes TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
+
+CREATE TABLE IF NOT EXISTS book_suppliers (
+    id TEXT PRIMARY KEY,
+    book_id TEXT NOT NULL,
+    supplier_id TEXT NOT NULL,
+    supplier_sku TEXT NOT NULL DEFAULT '',
+    is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0, 1)),
+    last_purchase_price NUMERIC NOT NULL DEFAULT 0 CHECK (last_purchase_price >= 0),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    UNIQUE (book_id, supplier_id),
+    FOREIGN KEY (book_id) REFERENCES books(id),
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
+);
+
+CREATE TABLE IF NOT EXISTS purchase_orders (
+    id TEXT PRIMARY KEY,
+    supplier_id TEXT NOT NULL,
+    supplier_name TEXT NOT NULL,
+    book_id TEXT NOT NULL,
+    book_name TEXT NOT NULL,
+    book_sku TEXT DEFAULT '',
+    unit_price NUMERIC NOT NULL DEFAULT 0 CHECK (unit_price >= 0),
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    delivered_quantity INTEGER NOT NULL DEFAULT 0 CHECK (delivered_quantity >= 0),
+    status TEXT NOT NULL DEFAULT 'offen' CHECK (status IN ('offen', 'teilgeliefert', 'geliefert')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    delivered_at TEXT,
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
+    FOREIGN KEY (book_id) REFERENCES books(id)
+);
+
+CREATE TABLE IF NOT EXISTS incoming_deliveries (
+    id TEXT PRIMARY KEY,
+    order_id TEXT NOT NULL,
+    supplier_id TEXT NOT NULL,
+    supplier_name TEXT NOT NULL,
+    book_id TEXT NOT NULL,
+    book_name TEXT NOT NULL,
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    unit_price NUMERIC NOT NULL DEFAULT 0 CHECK (unit_price >= 0),
+    received_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    FOREIGN KEY (order_id) REFERENCES purchase_orders(id),
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
+    FOREIGN KEY (book_id) REFERENCES books(id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_books_supplier_id ON books (supplier_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_books_sku_non_empty ON books (sku) WHERE sku <> '';
+CREATE INDEX IF NOT EXISTS ix_movements_book_id ON movements (book_id);
+CREATE INDEX IF NOT EXISTS ix_purchase_orders_supplier_id ON purchase_orders (supplier_id);
+CREATE INDEX IF NOT EXISTS ix_purchase_orders_book_id ON purchase_orders (book_id);
+CREATE INDEX IF NOT EXISTS ix_incoming_deliveries_order_id ON incoming_deliveries (order_id);
+CREATE INDEX IF NOT EXISTS ix_incoming_deliveries_book_id ON incoming_deliveries (book_id);
+CREATE INDEX IF NOT EXISTS ix_book_suppliers_supplier_id ON book_suppliers (supplier_id);
+CREATE INDEX IF NOT EXISTS ix_book_suppliers_book_id ON book_suppliers (book_id);
 
 
 -- ============================================
@@ -81,3 +138,17 @@ INSERT INTO suppliers (id, name, contact, address, notes, created_at) VALUES
 ('S001', 'Buchgrosshandel Wien GmbH', 'kontakt@bgh-wien.at', 'Mariahilfer Strasse 100, 1060 Wien', 'Hauptlieferant fuer alle Buecher', datetime('now', 'localtime')),
 ('S002', 'Thalia', 'Thalia@thalia.at', 'Mariahilfer Strasse 30, 1060 Wien', 'Bücherlieferant', datetime('now', 'localtime'));
 
+INSERT INTO book_suppliers (id, book_id, supplier_id, supplier_sku, is_primary, last_purchase_price, created_at, updated_at) VALUES
+('BS001', 'B001', 'S001', 'ISBN-978-3-608-93981-2', 1, 20.99, datetime('now', 'localtime'), datetime('now', 'localtime')),
+('BS002', 'B002', 'S001', 'ISBN-978-3-551-35401-3', 1, 10.49, datetime('now', 'localtime'), datetime('now', 'localtime')),
+('BS003', 'B003', 'S001', 'ISBN-978-3-548-23410-0', 1, 9.09, datetime('now', 'localtime'), datetime('now', 'localtime')),
+('BS004', 'B004', 'S001', 'ISBN-978-3-15-009900-1', 1, 5.95, datetime('now', 'localtime'), datetime('now', 'localtime')),
+('BS005', 'B005', 'S001', 'ISBN-978-3-15-000001-5', 1, 4.89, datetime('now', 'localtime'), datetime('now', 'localtime')),
+('BS006', 'B006', 'S001', 'ISBN-978-3-7306-0816-5', 1, 6.99, datetime('now', 'localtime'), datetime('now', 'localtime')),
+('BS007', 'B007', 'S001', 'ISBN-978-3-421-04595-9', 1, 11.89, datetime('now', 'localtime'), datetime('now', 'localtime')),
+('BS008', 'B008', 'S001', 'ISBN-978-0-13-235088-4', 1, 24.49, datetime('now', 'localtime'), datetime('now', 'localtime')),
+('BS009', 'B009', 'S001', 'ISBN-978-3-257-22800-7', 1, 8.39, datetime('now', 'localtime'), datetime('now', 'localtime')),
+('BS010', 'B010', 'S001', 'ISBN-978-3-522-20260-9', 1, 9.45, datetime('now', 'localtime'), datetime('now', 'localtime')),
+('BS011', 'B001', 'S002', 'THALIA-DRR-001', 0, 21.49, datetime('now', 'localtime'), datetime('now', 'localtime')),
+('BS012', 'B003', 'S002', 'THALIA-1984-001', 0, 9.59, datetime('now', 'localtime'), datetime('now', 'localtime')),
+('BS013', 'B008', 'S002', 'THALIA-CC-001', 0, 25.49, datetime('now', 'localtime'), datetime('now', 'localtime'));
