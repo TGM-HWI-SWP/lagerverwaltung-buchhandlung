@@ -75,16 +75,60 @@ Persönliches Changelog für Kattner, Rolle: Backend/Integration (FastAPI ↔ Re
 
 ---
 
+## [v0.3] - 2026-04-18
+
+### Implementiert
+- Datenbankstruktur für `src1/backend` deutlich verbessert:
+  - neue Tabelle `book_suppliers` für Mehrfach-Lieferanten pro Buch
+  - stärkere Constraints für Mengen/Preise/Status
+  - zusätzliche Indizes für häufige Relationen
+  - Geldfelder auf numerische Typen/sauberere Checks ausgerichtet
+- SQLite-Startlogik/Migration erweitert:
+  - bestehende Datenbanken können die neue Lieferanten-Zuordnung beim Start nachziehen
+  - Seed-SQL an das tatsächliche Schema angepasst
+- Lieferanten-/Bestell-Backend erweitert:
+  - persistente Bestellungen (`purchase_orders`)
+  - persistente Wareneingänge (`incoming_deliveries`)
+  - Zuordnung Buch ↔ Lieferant wird bei Anlage/Update/Wareneingang mitgeführt
+  - Lieferantenbestand nutzt die neue Zuordnungstabelle statt nur `books.supplier_id`
+- Frontend `App.tsx` umfassend überarbeitet:
+  - Bestellungen, Wareneingang, Warenausgang/Verkauf und Lieferantenbereich angepasst
+  - Bestell- und Lieferdaten von lokalem Browser-Storage auf Backend-Persistenz umgestellt
+  - Einbuchungs- und Teil-Liefer-Workflows an neue API-Endpunkte angebunden
+  - mobile Verkaufsansicht ergänzt
+- Contracts-Dokumentation erweitert und an die neue Persistenz-/DB-Struktur angepasst
+
+### Tests geschrieben
+- Neuer SQLite-Schematest für frische DBs und Seed-Daten:
+  - `src1/backend/tests/test_sqlite_schema.py`
+- Test deckt zusätzlich Constraints und Mehrfach-Lieferanten-Zuordnungen ab
+
+### Commits
+```
+- c1c4535 Improve database schema
+- 4853888 Improve supplier backend logic
+- ddb986b Update order, supplier and sales views
+```
+
+### Noch offen / nicht committed in diesem Moment
+- `docs/contracts.md` aktualisiert
+- `src1/backend/tests/test_sqlite_schema.py` neu angelegt
+- geplanter Commit-Text dafür: `Add schema test and update docs`
+
+### Mergekonflikt(e)
+- Keine
+
+---
+
 ## Zusammenfassung
 
-**Gesamt implementierte Features:** Backend-CRUD + DB-Session + SQLite + CORS + Root/Health + Inventory-Summary + minimale Book-Create/Delete UI + Vite-Fix  
-**Gesamt geschriebene Tests:** 0  
-**Gesamt Commits:** (nicht nachgetragen)  
-**Größte Herausforderung:** Container-Devserver Crash durch defekte sourcemap sowie API↔UI Datenmodell-Angleichung.  
-**Schönste Code-Zeile:** Auto-ID/Zeiten bei `create_book` (UUID + UTC-Timestamp).
+**Gesamt implementierte Features:** Backend-CRUD + DB-Session + SQLite + CORS + Root/Health + Inventory-Summary + Service/Adapter-Struktur + persistente Bestell-/Wareneingangslogik + Mehrfach-Lieferanten im DB-Modell + breiter UI-Ausbau fuer Bestellung/Wareneingang/Verkauf/Lieferanten  
+**Gesamt geschriebene Tests:** 1 neuer SQLite-Schematest (aktuell noch nicht separat committed)  
+**Gesamt Commits:** 6 erfasst  
+**Größte Herausforderung:** Datenmodell zwischen Frontend, API und SQLite konsistent weiterentwickeln, ohne den bestehenden `src1`-Flow zu zerbrechen.  
+**Schönste Code-Zeile:** automatische Pflege der Buch-Lieferanten-Zuordnung beim Persistieren statt reiner Einzel-FK-Logik.
 
 ---
 
 **Changelog erstellt von:** Kattner  
-**Letzte Aktualisierung:** 2026-03-27
-
+**Letzte Aktualisierung:** 2026-04-18

@@ -88,12 +88,41 @@ Wenn das fachlich benötigt ist, wird ein “compensating movements” Ansatz em
 
 - `Book`
 - `Movement`
+- `Supplier`
+- `BookSupplier`
+- `PurchaseOrder`
+- `IncomingDelivery`
 
 ### Pydantic Schemas (API Payloads)
 **Ort:** `src1/backend/app/db/schemas.py`
 
 - `BookSchema`
 - `MovementSchema`
+- `SupplierSchema`
+- `PurchaseOrderSchema`
+- `IncomingDeliverySchema`
+
+#### Payload-Hinweise
+
+- `BookSchema` akzeptiert fuer Preis- und Lieferantenfelder sowohl `snake_case`
+  (`purchase_price`, `sell_price`, `supplier_id`) als auch die im Frontend
+  verwendeten `camelCase`-Varianten (`purchasePrice`, `sellingPrice`, `supplierId`).
+- Damit bleibt der HTTP-Contract fuer bestehende UI-Komponenten rueckwaertskompatibel.
+
+#### Bestell- und Wareneingangs-Contract
+
+- `GET /purchase-orders` liefert offene und historische Bestellungen aus der DB
+- `POST /purchase-orders` legt Bestellungen persistent in `purchase_orders` an
+- `POST /purchase-orders/{order_id}/receive` erzeugt einen persistenten Wareneingang in `incoming_deliveries`
+- `GET /incoming-deliveries` listet noch nicht eingebuchte Lieferungen
+- `POST /incoming-deliveries/{delivery_id}/book` bucht Wareneingang ins Lager und erzeugt eine `IN`-Bewegung
+
+#### Struktur-Hinweise
+
+- `books.supplier_id` bleibt als primaerer/zuletzt genutzter Lieferant fuer bestehende UI-Flows erhalten
+- `book_suppliers` bildet die professionelle N:M-Zuordnung `Buch <-> Lieferant` ab
+- Geldfelder sind als numerische Werte mit Nicht-Negativ-Checks modelliert
+- Wichtige Fremdschluessel-Spalten besitzen zusaetzliche Indizes
 
 ---
 
@@ -103,3 +132,15 @@ Wenn das fachlich benötigt ist, wird ein “compensating movements” Ansatz em
 - Einführung `app/contracts/*` als Ports
 - SQLAlchemy Repositories als Adapter
 - Services als klare Use-Case Schicht
+
+### v0.3 (2026-04-18)
+- `BookSchema` fuer Frontend/Backend-Integration toleranter gemacht
+- Dokumentation des Feld-Mappings fuer UI-Clients ergänzt
+
+### v0.4 (2026-04-18)
+- Persistente Contracts fuer Bestellungen und Wareneingang ergänzt
+- DB-gestützten Ablauf `purchase_orders -> incoming_deliveries -> movements/books` dokumentiert
+
+### v0.5 (2026-04-18)
+- N:M-Modell `book_suppliers` fuer Mehrfach-Lieferanten ergänzt
+- Kern-Tabellen mit staerkeren Constraints und Indizes abgesichert
