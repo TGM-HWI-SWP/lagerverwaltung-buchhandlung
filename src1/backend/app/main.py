@@ -21,9 +21,10 @@ from app.core.config import settings                                            
 from app.core.errors import install_error_handlers
 from app.core.migrations import ensure_schema
 from app.db.models import Base                                                  # DB-Modelle
-from app.db.models import Book
+from app.db import models_commerce  # noqa: F401  # Registriert Commerce-Tabellen im Metadata-Objekt.
+from app.db.models import Book, Supplier
 from app.db.models_auth import StaffUser
-from app.db.session import engine, get_db                                       # DB-Verbindung
+from app.db.session import SessionLocal, engine, get_db                         # DB-Verbindung
 from app.db.schemas import (                                                    # Pydantic-Schemas
     BookSchema,
     MovementSchema,
@@ -35,9 +36,37 @@ from app.db.schemas import (                                                    
     IncomingDeliverySchema,
     BookIncomingDeliveryRequest,
 )
-from app.api import books, inventory, suppliers, activity, auth as auth_api          # CRUD-Logik + activity
-from app.core.auth_staff import require_admin, require_user
-from app.db.schemas_auth import LoginRequest, LoginResponse, WhoAmIResponse
+from app.api import books, inventory, suppliers, activity, auth as auth_api, commerce
+from app.core.auth_staff import hash_password, hash_pin, require_admin, require_user
+from app.core.time import utc_now_iso
+from app.db.schemas_auth import (
+    AdminLoginRequest,
+    BootstrapAdminRequest,
+    BootstrapStatusResponse,
+    CashierPinLoginRequest,
+    LoginRequest,
+    LoginResponse,
+    StaffUserCreateRequest,
+    StaffUserSummary,
+    StaffUserUpdateRequest,
+    WhoAmIResponse,
+)
+from app.db.schemas_commerce import (
+    CatalogProductCreateRequest,
+    CatalogProductSchema,
+    CatalogProductUpdateRequest,
+    DiscountRuleCreateRequest,
+    DiscountRuleSchema,
+    PurchaseOrderCreateRequest,
+    PurchaseOrderReceiveRequest,
+    PurchaseOrderResponse,
+    ReturnCreateRequest,
+    ReturnOrderResponse,
+    SaleCreateRequest,
+    SaleOrderResponse,
+    StockAdjustmentRequest,
+    StockEntrySchema,
+)
 
 
 def _clamp_pagination(offset: int, limit: int, *, max_limit: int = 100) -> tuple[int, int]:
@@ -75,12 +104,19 @@ def _ensure_sqlite_schema():
                         display_name VARCHAR NOT NULL,
                         role VARCHAR NOT NULL DEFAULT 'cashier',
                         pin_hash VARCHAR NOT NULL,
+                        password_hash VARCHAR NOT NULL DEFAULT '',
                         is_active BOOLEAN NOT NULL DEFAULT 1,
                         CONSTRAINT ck_staff_users_pin_hash_non_empty CHECK (pin_hash <> '')
                     )
                     """
                 )
             )
+
+        staff_columns = {col["name"] for col in inspector.get_columns("staff_users")}
+        if "avatar_image" not in staff_columns:
+            conn.execute(text("ALTER TABLE staff_users ADD COLUMN avatar_image VARCHAR NOT NULL DEFAULT ''"))
+        if "password_hash" not in staff_columns:
+            conn.execute(text("ALTER TABLE staff_users ADD COLUMN password_hash VARCHAR NOT NULL DEFAULT ''"))
         if "book_suppliers" not in table_names:
             conn.execute(
                 text(
@@ -217,66 +253,34 @@ def _ensure_sqlite_schema():
 
 
 def _ensure_default_supplier_data():
-    """Stellt sicher, dass ein Standard-Lieferant inkl. Lagerdaten existiert."""
+    """Stellt sicher, dass ein Standard-Lieferant existiert."""
     supplier_id = "S001"
     supplier_name = "Buchgroßhandel Wien GmbH"
     supplier_contact = "kontakt@bgh-wien.at"
     supplier_address = "Mariahilfer Straße 100, 1060 Wien"
     supplier_notes = "Hauptlieferant für alle Bücher"
 
-    with engine.begin() as conn:
-        supplier_exists = conn.execute(
-            text("SELECT COUNT(*) FROM suppliers WHERE id = :supplier_id"),
-            {"supplier_id": supplier_id},
-        ).scalar()
-
-        if not supplier_exists:
-            conn.execute(
-                text(
-                    """
-                    INSERT INTO suppliers (id, name, contact, address, notes, created_at)
-                    VALUES (:id, :name, :contact, :address, :notes, datetime('now', 'localtime'))
-                    """
-                ),
-                {
-                    "id": supplier_id,
-                    "name": supplier_name,
-                    "contact": supplier_contact,
-                    "address": supplier_address,
-                    "notes": supplier_notes,
-                },
-            )
-
-
-def _ensure_default_staff_user():
-    """Create a default admin user for first-time setup."""
-    from hashlib import sha256
-
-    with engine.begin() as conn:
-        exists = conn.execute(text("SELECT COUNT(*) FROM staff_users")).scalar()
-        if exists and int(exists) > 0:
+    db = SessionLocal()
+    try:
+        exists = db.query(Supplier).filter(Supplier.id == supplier_id).first()
+        if exists:
             return
-
-        # Default: admin/admin PIN 1234 (change immediately in Settings UI)
-        pin_hash = sha256("1234".encode("utf-8")).hexdigest()
-        conn.execute(
-            text(
-                """
-                INSERT INTO staff_users (id, username, display_name, role, pin_hash, is_active)
-                VALUES (:id, :username, :display_name, :role, :pin_hash, 1)
-                """
-            ),
-            {
-                "id": "U001",
-                "username": "admin",
-                "display_name": "Admin",
-                "role": "admin",
-                "pin_hash": pin_hash,
-            },
+        supplier = SupplierSchema(
+            id=supplier_id,
+            name=supplier_name,
+            contact=supplier_contact,
+            address=supplier_address,
+            notes=supplier_notes,
+            created_at=utc_now_iso(),
         )
+        suppliers.create_supplier(db, supplier)
+    finally:
+        db.close()
 
 def _seed_database():
     """Fügt Testdaten ein, wenn die Datenbank leer ist."""
+    if not str(engine.url).startswith("sqlite"):
+        return
     sql_file = Path(__file__).parent / "db" / "buchhandlung.sql"
     if not sql_file.exists():
         return
@@ -295,7 +299,6 @@ def _seed_database():
 _ensure_sqlite_schema()
 _seed_database()
 _ensure_default_supplier_data()
-_ensure_default_staff_user()
 
 # Explicit migration hook (currently no-op; keeps a clean seam for future extraction)
 ensure_schema()
@@ -337,9 +340,263 @@ def auth_login(payload: LoginRequest, db: Session = Depends(get_db)):
     return auth_api.login(db, payload)
 
 
+@app.post("/auth/admin-login", response_model=LoginResponse)
+def auth_admin_login(payload: AdminLoginRequest, db: Session = Depends(get_db)):
+    return auth_api.admin_login(db, payload)
+
+
+@app.get("/auth/bootstrap-status", response_model=BootstrapStatusResponse)
+def auth_bootstrap_status(db: Session = Depends(get_db)):
+    admin_count = db.query(StaffUser).filter(StaffUser.role == "admin", StaffUser.is_active == True).count()  # noqa: E712
+    return BootstrapStatusResponse(setup_required=admin_count == 0)
+
+
+@app.post("/auth/bootstrap-admin", response_model=StaffUserSummary, status_code=201)
+def auth_bootstrap_admin(payload: BootstrapAdminRequest, db: Session = Depends(get_db)):
+    admin_count = db.query(StaffUser).filter(StaffUser.role == "admin", StaffUser.is_active == True).count()  # noqa: E712
+    if admin_count > 0:
+        raise HTTPException(status_code=409, detail="Admin ist bereits eingerichtet")
+
+    username = payload.username.strip().lower()
+    existing = db.query(StaffUser).filter(StaffUser.username == username).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Benutzername bereits vergeben")
+
+    created = StaffUser(
+        id=f"U{uuid4().hex[:8].upper()}",
+        username=username,
+        display_name=payload.display_name.strip(),
+        role="admin",
+        pin_hash=hash_pin(payload.pin),
+        password_hash=hash_password(payload.password),
+        avatar_image=payload.avatar_image,
+        is_active=True,
+    )
+    db.add(created)
+    db.commit()
+    db.refresh(created)
+    return StaffUserSummary(
+        id=created.id,
+        username=created.username,
+        display_name=created.display_name,
+        role=created.role,
+        avatar_image=created.avatar_image or "",
+    )
+
+
+@app.post("/auth/cashier-login", response_model=LoginResponse)
+def auth_cashier_login(payload: CashierPinLoginRequest, db: Session = Depends(get_db)):
+    return auth_api.cashier_pin_login(db, payload)
+
+
 @app.get("/auth/me", response_model=WhoAmIResponse)
 def auth_me(user=Depends(require_user)):
     return auth_api.whoami(user)
+
+
+@app.get("/staff-users", response_model=list[StaffUserSummary])
+def read_staff_users(
+    db: Session = Depends(get_db),
+    user=Depends(require_admin),
+):
+    rows = (
+        db.query(StaffUser)
+        .filter(StaffUser.is_active == True)  # noqa: E712
+        .order_by(StaffUser.role.desc(), StaffUser.display_name.asc())
+        .all()
+    )
+    return [
+        StaffUserSummary(
+            id=row.id,
+            username=row.username,
+            display_name=row.display_name,
+            role=row.role,
+            avatar_image=row.avatar_image or "",
+        )
+        for row in rows
+    ]
+
+
+@app.get("/staff-users/cashier-list", response_model=list[StaffUserSummary])
+def read_cashier_list(db: Session = Depends(get_db)):
+    rows = (
+        db.query(StaffUser)
+        .filter(StaffUser.is_active == True)  # noqa: E712
+        .order_by(StaffUser.display_name.asc())
+        .all()
+    )
+    return [
+        StaffUserSummary(
+            id=row.id,
+            username=row.username,
+            display_name=row.display_name,
+            role=row.role,
+            avatar_image=row.avatar_image or "",
+        )
+        for row in rows
+    ]
+
+
+@app.get("/staff-users/admin-list", response_model=list[StaffUserSummary])
+def read_admin_list(db: Session = Depends(get_db)):
+    rows = (
+        db.query(StaffUser)
+        .filter(StaffUser.is_active == True, StaffUser.role == "admin")  # noqa: E712
+        .order_by(StaffUser.display_name.asc())
+        .all()
+    )
+    return [
+        StaffUserSummary(
+            id=row.id,
+            username=row.username,
+            display_name=row.display_name,
+            role=row.role,
+            avatar_image=row.avatar_image or "",
+        )
+        for row in rows
+    ]
+
+
+@app.post("/staff-users", response_model=StaffUserSummary, status_code=201)
+def create_staff_user(
+    payload: StaffUserCreateRequest,
+    db: Session = Depends(get_db),
+    user=Depends(require_admin),
+):
+    username = payload.username.strip().lower()
+    display_name = payload.display_name.strip()
+    role = payload.role.strip().lower() if payload.role else "cashier"
+    if role not in {"cashier", "admin"}:
+        raise HTTPException(status_code=400, detail="Ungültige Rolle")
+    if role == "admin" and len(payload.password.strip()) < 12:
+        raise HTTPException(status_code=400, detail="Admin-Passwort muss mindestens 12 Zeichen haben")
+
+    existing = db.query(StaffUser).filter(StaffUser.username == username).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Benutzername bereits vergeben")
+
+    created = StaffUser(
+        id=f"U{uuid4().hex[:8].upper()}",
+        username=username,
+        display_name=display_name,
+        role=role,
+        pin_hash=hash_pin(payload.pin),
+        password_hash=hash_password(payload.password) if role == "admin" else "",
+        avatar_image=payload.avatar_image,
+        is_active=True,
+    )
+    db.add(created)
+    db.commit()
+    db.refresh(created)
+    return StaffUserSummary(
+        id=created.id,
+        username=created.username,
+        display_name=created.display_name,
+        role=created.role,
+        avatar_image=created.avatar_image or "",
+    )
+
+
+@app.put("/staff-users/{user_id}", response_model=StaffUserSummary)
+def update_staff_user(
+    user_id: str,
+    payload: StaffUserUpdateRequest,
+    db: Session = Depends(get_db),
+    user=Depends(require_admin),
+):
+    staff_user = db.query(StaffUser).filter(StaffUser.id == user_id).first()
+    if not staff_user:
+        raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden")
+    
+    updates = {}
+    if payload.display_name is not None:
+        updates["display_name"] = payload.display_name.strip()
+    if payload.pin is not None:
+        updates["pin_hash"] = hash_pin(payload.pin)
+    if payload.role is not None:
+        role = payload.role.strip().lower()
+        if role not in {"cashier", "admin"}:
+            raise HTTPException(status_code=400, detail="Ungültige Rolle")
+        updates["role"] = role
+        if role == "admin" and not staff_user.password_hash:
+            # Wenn Admin wird, aber kein Passwort hat, muss eins gesetzt werden
+            raise HTTPException(
+                status_code=400, 
+                detail="Admin benötigt ein Passwort. Bitte setzen Sie ein Passwort mit dem Passwort-Feld."
+            )
+    if payload.password is not None:
+        if payload.password.strip() and len(payload.password.strip()) >= 12:
+            updates["password_hash"] = hash_password(payload.password)
+        elif payload.password.strip() == "":
+            updates["password_hash"] = ""
+        else:
+            raise HTTPException(status_code=400, detail="Admin-Passwort muss mindestens 12 Zeichen haben")
+    if payload.avatar_image is not None:
+        updates["avatar_image"] = payload.avatar_image
+    if payload.is_active is not None:
+        updates["is_active"] = payload.is_active
+    
+    for key, value in updates.items():
+        setattr(staff_user, key, value)
+    
+    db.commit()
+    db.refresh(staff_user)
+    
+    return StaffUserSummary(
+        id=staff_user.id,
+        username=staff_user.username,
+        display_name=staff_user.display_name,
+        role=staff_user.role,
+        avatar_image=staff_user.avatar_image or "",
+    )
+
+
+@app.delete("/staff-users/{user_id}")
+def delete_staff_user(
+    user_id: str,
+    db: Session = Depends(get_db),
+    user=Depends(require_admin),
+):
+    staff_user = db.query(StaffUser).filter(StaffUser.id == user_id).first()
+    if not staff_user:
+        raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden")
+    
+    # Soft delete: is_active auf False setzen
+    staff_user.is_active = False
+    db.commit()
+    
+    return {"detail": "Mitarbeiter deaktiviert"}
+
+
+# ── Test Data ──────────────────────────────────────────────
+
+
+@app.post("/test-data/seed", status_code=201)
+def seed_test_data(
+    db: Session = Depends(get_db),
+    user=Depends(require_admin),
+):
+    """Lädt Demo-Daten für alle Bereiche (Bücher, Lager, Verkäufe, Lieferanten, Staff-User)."""
+    try:
+        from app.services.test_data import seed_all_test_data
+        result = seed_all_test_data(db)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Fehler beim Laden der Demo-Daten: {str(e)}")
+
+
+@app.delete("/test-data/clear")
+def clear_test_data(
+    db: Session = Depends(get_db),
+    user=Depends(require_admin),
+):
+    """Löscht nur Demo-Daten (markierte Test-Einträge)."""
+    try:
+        from app.services.test_data import clear_all_test_data
+        result = clear_all_test_data(db)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Fehler beim Löschen der Demo-Daten: {str(e)}")
 
 
 # ── Books ──────────────────────────────────────────────
@@ -478,6 +735,144 @@ def inventory_summary(db: Session = Depends(get_db)):
     }
 
 
+# ── Commerce v2 (Katalog, Bestand, Verkauf, Retouren) ─────────────
+
+
+@app.get("/catalog/products", response_model=list[CatalogProductSchema])
+def read_catalog_products(
+    include_inactive: bool = False,
+    db: Session = Depends(get_db),
+    user=Depends(require_user),
+):
+    return commerce.list_catalog_products(db, include_inactive)
+
+
+@app.post("/catalog/products", response_model=CatalogProductSchema, status_code=201)
+def create_catalog_product(
+    payload: CatalogProductCreateRequest,
+    db: Session = Depends(get_db),
+    user=Depends(require_admin),
+):
+    try:
+        return commerce.create_catalog_product(db, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.put("/catalog/products/{product_id}", response_model=CatalogProductSchema)
+def update_catalog_product(
+    product_id: str,
+    payload: CatalogProductUpdateRequest,
+    db: Session = Depends(get_db),
+    user=Depends(require_admin),
+):
+    try:
+        return commerce.update_catalog_product(db, product_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/inventory/stock", response_model=list[StockEntrySchema])
+def read_stock_entries(
+    include_zero: bool = False,
+    warehouse_code: str | None = None,
+    db: Session = Depends(get_db),
+    user=Depends(require_user),
+):
+    return commerce.list_stock(db, include_zero=include_zero, warehouse_code=warehouse_code)
+
+
+@app.post("/inventory/stock-adjustments", response_model=StockEntrySchema)
+def create_stock_adjustment(
+    payload: StockAdjustmentRequest,
+    db: Session = Depends(get_db),
+    user=Depends(require_admin),
+):
+    try:
+        return commerce.adjust_stock(db, payload, performed_by=user.username)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/discount-rules", response_model=list[DiscountRuleSchema])
+def read_discount_rules(
+    only_active: bool = True,
+    db: Session = Depends(get_db),
+    user=Depends(require_user),
+):
+    return commerce.list_discount_rules(db, only_active=only_active)
+
+
+@app.post("/discount-rules", response_model=DiscountRuleSchema, status_code=201)
+def create_discount_rule(
+    payload: DiscountRuleCreateRequest,
+    db: Session = Depends(get_db),
+    user=Depends(require_admin),
+):
+    try:
+        return commerce.create_discount_rule(db, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/sales/orders", response_model=SaleOrderResponse, status_code=201)
+def create_sales_order(
+    payload: SaleCreateRequest,
+    db: Session = Depends(get_db),
+    user=Depends(require_user),
+):
+    try:
+        return commerce.create_sale(db, payload, cashier_user_id=user.user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/sales/orders/{sales_order_id}/returns", response_model=ReturnOrderResponse, status_code=201)
+def create_sales_return(
+    sales_order_id: str,
+    payload: ReturnCreateRequest,
+    db: Session = Depends(get_db),
+    user=Depends(require_user),
+):
+    try:
+        return commerce.create_return(db, sales_order_id, payload, processed_by_user_id=user.user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/purchase-orders-v2", response_model=PurchaseOrderResponse, status_code=201)
+def create_purchase_order_v2(
+    payload: PurchaseOrderCreateRequest,
+    db: Session = Depends(get_db),
+    user=Depends(require_admin),
+):
+    try:
+        return commerce.create_purchase_order(db, payload, user_id=user.user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/purchase-orders-v2", response_model=list[PurchaseOrderResponse])
+def read_purchase_orders_v2(
+    db: Session = Depends(get_db),
+    user=Depends(require_user),
+):
+    return commerce.list_purchase_orders(db)
+
+
+@app.post("/purchase-orders-v2/{order_id}/receive", response_model=PurchaseOrderResponse)
+def receive_purchase_order_v2(
+    order_id: str,
+    payload: PurchaseOrderReceiveRequest,
+    db: Session = Depends(get_db),
+    user=Depends(require_admin),
+):
+    try:
+        return commerce.receive_purchase_order(db, order_id, payload, user_id=user.user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 # ── Reports ────────────────────────────────────────────
 
 
@@ -577,6 +972,31 @@ def read_purchase_orders(
     return suppliers.get_all_purchase_orders(db, offset=offset, limit=limit)
 
 
+@app.post("/purchase-orders", response_model=PurchaseOrderSchema, status_code=201)
+def create_purchase_order(
+    order: PurchaseOrderSchema,
+    db: Session = Depends(get_db),
+    user=Depends(require_admin),
+):
+    try:
+        return suppliers.create_purchase_order(db, order)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/purchase-orders/{order_id}/receive", response_model=IncomingDeliverySchema)
+def receive_purchase_order(
+    order_id: str,
+    payload: ReceivePurchaseOrderRequest,
+    db: Session = Depends(get_db),
+    user=Depends(require_admin),
+):
+    try:
+        return suppliers.receive_purchase_order(db, order_id, payload.quantity)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.get("/incoming-deliveries", response_model=list[IncomingDeliverySchema])
 def read_incoming_deliveries(
     db: Session = Depends(get_db),
@@ -587,7 +1007,20 @@ def read_incoming_deliveries(
     return suppliers.get_all_incoming_deliveries(db, offset=offset, limit=limit)
 
 
- # ── Activity Logs ───────────────────────────────────────
+@app.post("/incoming-deliveries/{delivery_id}/book", response_model=MovementSchema, status_code=201)
+def book_incoming_delivery(
+    delivery_id: str,
+    payload: BookIncomingDeliveryRequest,
+    db: Session = Depends(get_db),
+    user=Depends(require_admin),
+):
+    try:
+        return suppliers.book_incoming_delivery(db, delivery_id, performed_by=user.username)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+# ── Activity Logs ───────────────────────────────────────
 
 
 @app.get("/activity-logs")
@@ -618,7 +1051,7 @@ def read_activity_logs(
     return {"total": total, "offset": offset, "limit": limit, "logs": logs}
 
 
- # ── Export ──────────────────────────────────────────────
+# ── Export ──────────────────────────────────────────────
 
 
 @app.get("/export/books")

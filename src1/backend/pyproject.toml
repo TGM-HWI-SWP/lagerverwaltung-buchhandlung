@@ -11,6 +11,8 @@ dependencies = [
   "fastapi",
   "uvicorn[standard]",
   "sqlalchemy",
+  "psycopg[binary]",
+  "bcrypt",
   "pydantic-settings",
   "matplotlib",
 ]
@@ -23,5 +25,4 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
-
 

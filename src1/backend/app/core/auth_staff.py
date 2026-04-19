@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
-from hashlib import sha256
 
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
@@ -10,6 +10,12 @@ from app.core.auth_tokens import verify_token
 from app.core.config import settings
 from app.db.models_auth import StaffUser
 from app.db.session import get_db
+
+try:
+    import bcrypt
+    HAS_BCRYPT = True
+except ImportError:
+    HAS_BCRYPT = False
 
 
 @dataclass(frozen=True)
@@ -21,7 +27,42 @@ class AuthUser:
 
 
 def hash_pin(pin: str) -> str:
-    return sha256(pin.encode("utf-8")).hexdigest()
+    """Hash a 4-digit PIN using bcrypt (fallback to SHA-256)."""
+    if HAS_BCRYPT:
+        salt = bcrypt.gensalt(rounds=6)
+        return bcrypt.hashpw(pin.encode("utf-8"), salt).decode("utf-8")
+    else:
+        return hashlib.sha256(pin.encode("utf-8")).hexdigest()
+
+
+def hash_password(password: str) -> str:
+    """Hash a password using bcrypt (fallback to SHA-256)."""
+    if HAS_BCRYPT:
+        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    else:
+        return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+def verify_pin(pin: str, hashed_pin: str) -> bool:
+    """Verify a PIN against its hash (bcrypt or SHA-256)."""
+    if HAS_BCRYPT:
+        try:
+            return bcrypt.checkpw(pin.encode("utf-8"), hashed_pin.encode("utf-8"))
+        except (ValueError, TypeError):
+            return False
+    else:
+        return hash_pin(pin) == hashed_pin
+
+
+def verify_password(password: str, hashed_password: str) -> bool:
+    """Verify a password against its hash (bcrypt or SHA-256)."""
+    if HAS_BCRYPT:
+        try:
+            return bcrypt.checkpw(password.encode("utf-8"), hashed_password.encode("utf-8"))
+        except (ValueError, TypeError):
+            return False
+    else:
+        return hash_password(password) == hashed_password
 
 
 def require_user(
