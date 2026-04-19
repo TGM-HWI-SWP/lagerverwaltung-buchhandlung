@@ -6,9 +6,7 @@ import type { Book, SaleEntry } from "@/types";
 import { parseSaleEntry } from "@/lib/mappers";
 import { apiPost } from "@/api/client";
 
-function tableBorderClass(dark: boolean): string {
-  return dark ? "border-gray-800" : "border-gray-200";
-}
+// (duplicate removed)
 
 interface GoodsOutPageProps {
   card: string;
@@ -69,7 +67,7 @@ export function GoodsOutPage({ card, dark, books, reloadBooks, salesLog, reloadM
         total: saleType === "Verkauf" ? price * qty : -price * qty,
         createdAt: new Date().toISOString(),
         reason: reasonText,
-      }));
+      });
       reloadBooks();
       reloadMovements();
       setQuantity("1");
