@@ -135,8 +135,8 @@ INSERT INTO movements (id, book_id, book_name, quantity_change, movement_type, r
 -- ============================================
 
 INSERT INTO suppliers (id, name, contact, address, notes, created_at) VALUES
-('S001', 'Buchgrosshandel Wien GmbH', 'kontakt@bgh-wien.at', 'Mariahilfer Strasse 100, 1060 Wien', 'Hauptlieferant fuer alle Buecher', datetime('now', 'localtime')),
-('S002', 'Thalia', 'Thalia@thalia.at', 'Mariahilfer Strasse 30, 1060 Wien', 'Bücherlieferant', datetime('now', 'localtime'));
+('S001', 'Buchgroßhandel Wien GmbH', 'kontakt@bgh-wien.at', 'Mariahilfer Straße 100, 1060 Wien', 'Hauptlieferant für alle Bücher', datetime('now', 'localtime')),
+('S002', 'Thalia', 'Thalia@thalia.at', 'Mariahilfer Straße 30, 1060 Wien', 'Bücherlieferant', datetime('now', 'localtime'));
 
 INSERT INTO book_suppliers (id, book_id, supplier_id, supplier_sku, is_primary, last_purchase_price, created_at, updated_at) VALUES
 ('BS001', 'B001', 'S001', 'ISBN-978-3-608-93981-2', 1, 20.99, datetime('now', 'localtime'), datetime('now', 'localtime')),

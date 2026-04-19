@@ -18,7 +18,7 @@ def normalize_optional_timestamp(value: str | None) -> str | None:
     try:
         parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
     except ValueError as exc:
-        raise ValueError("Zeitstempel muss ein gueltiges ISO-8601-Datum sein") from exc
+        raise ValueError("Zeitstempel muss ein gültiges ISO-8601-Datum sein") from exc
 
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)

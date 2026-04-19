@@ -134,10 +134,10 @@ def _ensure_sqlite_schema():
 def _ensure_default_supplier_data():
     """Stellt sicher, dass ein Standard-Lieferant inkl. Lagerdaten existiert."""
     supplier_id = "S001"
-    supplier_name = "Buchgrosshandel Wien GmbH"
+    supplier_name = "Buchgroßhandel Wien GmbH"
     supplier_contact = "kontakt@bgh-wien.at"
-    supplier_address = "Mariahilfer Strasse 100, 1060 Wien"
-    supplier_notes = "Hauptlieferant fuer alle Buecher"
+    supplier_address = "Mariahilfer Straße 100, 1060 Wien"
+    supplier_notes = "Hauptlieferant für alle Bücher"
 
     with engine.begin() as conn:
         supplier_exists = conn.execute(
@@ -216,7 +216,7 @@ def health():
 # ── Books ──────────────────────────────────────────────
 
 
-@app.get("/books", response_model=list[BookSchema])                             # Alle Buecher holen
+@app.get("/books", response_model=list[BookSchema])                             # Alle Bücher holen
 def read_books(db: Session = Depends(get_db)):
     return books.get_all_books(db)
 
@@ -248,7 +248,7 @@ def update_book(book_id: str, book: BookSchema, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.delete("/books/{book_id}")                                                 # Buch loeschen
+@app.delete("/books/{book_id}")                                                 # Buch löschen
 def delete_book(book_id: str, db: Session = Depends(get_db)):
     try:
         if not books.delete_book(db, book_id):                                  # Nicht gefunden
@@ -293,7 +293,7 @@ def update_movement(movement_id: str, movement: MovementSchema, db: Session = De
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.delete("/movements/{movement_id}")                                         # Bewegung loeschen
+@app.delete("/movements/{movement_id}")                                         # Bewegung löschen
 def delete_movement(movement_id: str, db: Session = Depends(get_db)):
     if not inventory.delete_movement(db, movement_id):                          # Nicht gefunden
         raise HTTPException(status_code=404, detail="Bewegung nicht gefunden")
@@ -303,7 +303,7 @@ def delete_movement(movement_id: str, db: Session = Depends(get_db)):
 # ── Inventory ──────────────────────────────────────────
 
 
-@app.get("/inventory")                                                          # Lager-Uebersicht
+@app.get("/inventory")                                                          # Lager-Übersicht
 def inventory_summary(db: Session = Depends(get_db)):
     total_titles = db.query(func.count(Book.id)).scalar() or 0
     total_units = db.query(func.coalesce(func.sum(Book.quantity), 0)).scalar() or 0

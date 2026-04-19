@@ -207,7 +207,7 @@ class PurchaseOrderSchema(BaseModel):
     @classmethod
     def validate_purchase_quantities(cls, value: int) -> int:
         if value < 0:
-            raise ValueError("Mengen duerfen nicht negativ sein")
+            raise ValueError("Mengen dürfen nicht negativ sein")
         return value
 
     @field_validator("status")
@@ -226,9 +226,9 @@ class PurchaseOrderSchema(BaseModel):
     @model_validator(mode="after")
     def validate_purchase_order_consistency(self) -> "PurchaseOrderSchema":
         if self.quantity <= 0:
-            raise ValueError("quantity muss groesser als 0 sein")
+            raise ValueError("quantity muss größer als 0 sein")
         if self.delivered_quantity > self.quantity:
-            raise ValueError("delivered_quantity darf nicht groesser als quantity sein")
+            raise ValueError("delivered_quantity darf nicht größer als quantity sein")
         return self
 
 
@@ -239,7 +239,7 @@ class ReceivePurchaseOrderRequest(BaseModel):
     @classmethod
     def validate_receive_quantity(cls, value: int) -> int:
         if value <= 0:
-            raise ValueError("quantity muss groesser als 0 sein")
+            raise ValueError("quantity muss größer als 0 sein")
         return value
 
 
@@ -273,7 +273,7 @@ class IncomingDeliverySchema(BaseModel):
     @classmethod
     def validate_incoming_quantity(cls, value: int) -> int:
         if value <= 0:
-            raise ValueError("quantity muss groesser als 0 sein")
+            raise ValueError("quantity muss größer als 0 sein")
         return value
 
     @field_validator("unit_price")

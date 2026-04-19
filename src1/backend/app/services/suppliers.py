@@ -98,7 +98,7 @@ class SupplierService:
 
         remaining_quantity = int(order.quantity) - int(order.delivered_quantity)
         if quantity > remaining_quantity:
-            raise ValueError("Liefermenge ist groesser als die offene Restmenge")
+            raise ValueError("Liefermenge ist größer als die offene Restmenge")
 
         now = utc_now_iso()
         delivery = IncomingDelivery(

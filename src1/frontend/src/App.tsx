@@ -63,7 +63,6 @@ type EditBookDraft = NewBookDraft;
 type AppSettings = {
   lowStockThreshold: number;
   confirmDelete: boolean;
-  compactTable: boolean;
   autoRefresh: boolean;
   autoRefreshSeconds: number;
 };
@@ -156,12 +155,33 @@ type IncomingDeliveryApi = {
 const DEFAULT_SETTINGS: AppSettings = {
   lowStockThreshold: 5,
   confirmDelete: true,
-  compactTable: false,
   autoRefresh: false,
   autoRefreshSeconds: 30,
 };
 
 const SETTINGS_STORAGE_KEY = "bookmanager.settings";
+
+const PAGE_TITLES: Record<PageKey, string> = {
+  dashboard: "Dashboard",
+  lager: "Lager",
+  bestellen: "Bestellen",
+  wareneingang: "Wareneingang",
+  verkauf: "Verkauf",
+  lieferanten: "Lieferanten",
+  reports: "Berichte",
+  einstellungen: "Einstellungen",
+};
+
+const PAGE_DESCRIPTIONS: Record<PageKey, string> = {
+  dashboard: "Kennzahlen, Umsatzentwicklung und aktueller Überblick.",
+  lager: "Bücher, Bestände und Stammdaten zentral verwalten.",
+  bestellen: "Erst- und Nachbestellungen sauber anlegen und verfolgen.",
+  wareneingang: "Angekommene Lieferungen prüfen und ins Lager einbuchen.",
+  verkauf: "Verkäufe und Retouren direkt aus dem Bestand buchen.",
+  lieferanten: "Lieferantenbeziehungen und Kontaktdaten im Blick behalten.",
+  reports: "Bestandsberichte exportieren und Entwicklungen auswerten.",
+  einstellungen: "Schwellenwerte, Aktualisierung und Komfortfunktionen anpassen.",
+};
 
 type SaleType = "Verkauf" | "Retoure";
 
@@ -461,19 +481,24 @@ export default function Dashboard() {
     : "w-64 min-h-screen shrink-0 border-r bg-white text-gray-900";
 
   const topbar = dark
-    ? "flex justify-between items-center p-6 border-b border-gray-800"
-    : "flex justify-between items-center p-6 border-b border-gray-200";
+    ? "flex flex-wrap items-start justify-between gap-4 border-b border-gray-800 p-6"
+    : "flex flex-wrap items-start justify-between gap-4 border-b border-gray-200 p-6";
 
   const card = dark
-    ? "bg-gray-900 border-gray-800 text-white"
-    : "bg-white border-gray-200 text-gray-900";
+    ? "border-gray-800 bg-gray-900 text-white shadow-sm shadow-black/20"
+    : "border-gray-200 bg-white text-gray-900 shadow-sm shadow-gray-200/60";
 
   return (
     <div className={container}>
       <div className="flex min-h-screen">
         {/* Sidebar */}
         <div className={sidebar}>
-          <div className="p-6 text-xl font-bold">BookManager</div>
+          <div className="p-6">
+            <div className="text-xl font-bold">Buchhandlung</div>
+            <div className={dark ? "mt-1 text-sm text-gray-400" : "mt-1 text-sm text-gray-500"}>
+              Lager, Einkauf und Verkauf
+            </div>
+          </div>
 
           <nav className="flex flex-col gap-2 px-3">
             <MenuButton
@@ -526,7 +551,7 @@ export default function Dashboard() {
             />
             <MenuButton
               icon={<FileText size={18} />}
-              label="Reports"
+              label="Berichte"
               value="reports"
               page={page}
               setPage={setPage}
@@ -547,14 +572,19 @@ export default function Dashboard() {
         <div className="flex-1 min-h-screen">
           {/* Topbar */}
           <div className={topbar}>
-            <h1 className="text-2xl font-semibold capitalize">{page}</h1>
+            <div>
+              <h1 className="text-2xl font-semibold">{PAGE_TITLES[page]}</h1>
+              <p className={dark ? "mt-1 text-sm text-gray-400" : "mt-1 text-sm text-gray-500"}>
+                {PAGE_DESCRIPTIONS[page]}
+              </p>
+            </div>
 
-            <Button variant="outline" onClick={toggleTheme}>
+            <Button variant="outline" onClick={toggleTheme} aria-label="Farbschema wechseln">
               {dark ? <Sun size={18} /> : <Moon size={18} />}
             </Button>
           </div>
 
-          <div className="p-6">
+          <div className="mx-auto w-full max-w-7xl p-6">
             {page === "dashboard" && (
               <DashboardPage card={card} stats={stats} loading={loadingBooks} salesLog={salesLog} />
             )}
@@ -606,7 +636,13 @@ export default function Dashboard() {
                 reloadMovements={reloadMovements}
               />
             )}
-            {page === "reports" && <ReportsPage card={card} />}
+            {page === "reports" && (
+              <ReportsPage
+                card={card}
+                dark={dark}
+                onOpenDashboard={() => setPage("dashboard")}
+              />
+            )}
             {page === "lieferanten" && (
               <SuppliersPage
                 card={card}
@@ -758,7 +794,7 @@ function InventoryPage({
   const tableBorder = dark ? "border-gray-800" : "border-gray-200";
   const tableHeadText = dark ? "text-gray-400" : "text-gray-500";
   const lowStockText = dark ? "text-amber-300" : "text-amber-700";
-  const rowPaddingClass = settings.compactTable ? "py-1" : "py-2";
+  const rowPaddingClass = "py-2";
   const modalInputClass = dark
     ? "w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-white placeholder:text-gray-400"
     : "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500";
@@ -862,7 +898,7 @@ function InventoryPage({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <Button onClick={() => setSearch("")}>Reset</Button>
+            <Button variant="outline" onClick={() => setSearch("")}>Zurücksetzen</Button>
           </div>
 
           {editOpen && (
@@ -878,7 +914,7 @@ function InventoryPage({
                     setEditError(null);
                   }}
                 >
-                  X
+                  Schließen
                 </Button>
               </div>
 
@@ -974,56 +1010,58 @@ function InventoryPage({
           )}
 
           {!loading && !error && (
-            <table className="mt-2 w-full text-left text-sm">
-              <thead>
-                <tr className={`border-b ${tableBorder} text-xs uppercase ${tableHeadText}`}>
-                  <th className="py-2">Buch</th>
-                  <th>Kategorie</th>
-                  <th>Beschreibung</th>
-                  <th>Verkaufspreis</th>
-                  <th>Bestand</th>
-                  <th>Notiz</th>
-                </tr>
-              </thead>
+            <div className="overflow-x-auto">
+              <table className="mt-2 min-w-full text-left text-sm">
+                <thead>
+                  <tr className={`border-b ${tableBorder} text-xs uppercase ${tableHeadText}`}>
+                    <th className="py-2">Buch</th>
+                    <th>Kategorie</th>
+                    <th>Beschreibung</th>
+                    <th>Verkaufspreis</th>
+                    <th>Bestand</th>
+                    <th>Notiz</th>
+                  </tr>
+                </thead>
 
-              <tbody>
-                {filteredBooks.length === 0 && (
-                  <tr>
-                    <td className={`py-4 ${mutedText}`} colSpan={6}>
-                      Keine passenden Bücher vorhanden.
-                    </td>
-                  </tr>
-                )}
-                {filteredBooks.map((book) => (
-                  <tr
-                    key={book.id}
-                    className={`border-b ${tableBorder} last:border-b-0`}
-                  >
-                    <td className={rowPaddingClass}>
-                      <div className="font-medium">{book.name}</div>
-                      {!!book.author && (
-                        <div className={`text-xs ${mutedText}`}>{book.author}</div>
-                      )}
-                      <div className={`text-xs ${mutedText}`}>{book.sku || "ohne SKU"}</div>
-                    </td>
-                    <td>{book.category || "-"}</td>
-                    <td className={rowPaddingClass}>{book.description || "-"}</td>
-                    <td>
-                      €{(book.sellingPrice || book.price || 0).toFixed(2)}
-                    </td>
-                    <td className={book.quantity <= settings.lowStockThreshold ? lowStockText : ""}>
-                      <div className="flex items-center justify-between gap-3">
-                        <span>{book.quantity}</span>
-                        <Button size="sm" variant="outline" onClick={() => openEditModal(book)}>
-                          Bearbeiten
-                        </Button>
-                      </div>
-                    </td>
-                    <td className={rowPaddingClass}>{book.notes || "-"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                <tbody>
+                  {filteredBooks.length === 0 && (
+                    <tr>
+                      <td className={`py-4 ${mutedText}`} colSpan={6}>
+                        Keine passenden Bücher vorhanden.
+                      </td>
+                    </tr>
+                  )}
+                  {filteredBooks.map((book) => (
+                    <tr
+                      key={book.id}
+                      className={`border-b ${tableBorder} last:border-b-0`}
+                    >
+                      <td className={rowPaddingClass}>
+                        <div className="font-medium">{book.name}</div>
+                        {!!book.author && (
+                          <div className={`text-xs ${mutedText}`}>{book.author}</div>
+                        )}
+                        <div className={`text-xs ${mutedText}`}>{book.sku || "ohne SKU"}</div>
+                      </td>
+                      <td>{book.category || "-"}</td>
+                      <td className={rowPaddingClass}>{book.description || "-"}</td>
+                      <td>
+                        €{(book.sellingPrice || book.price || 0).toFixed(2)}
+                      </td>
+                      <td className={book.quantity <= settings.lowStockThreshold ? lowStockText : ""}>
+                        <div className="flex items-center justify-between gap-3">
+                          <span>{book.quantity}</span>
+                          <Button size="sm" variant="outline" onClick={() => openEditModal(book)}>
+                            Bearbeiten
+                          </Button>
+                        </div>
+                      </td>
+                      <td className={rowPaddingClass}>{book.notes || "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -1031,9 +1069,18 @@ function InventoryPage({
   );
 }
 
-function ReportsPage({ card }: { card: string }) {
+function ReportsPage({
+  card,
+  dark,
+  onOpenDashboard,
+}: {
+  card: string;
+  dark: boolean;
+  onOpenDashboard: () => void;
+}) {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const mutedText = dark ? "text-gray-400" : "text-gray-500";
 
   const downloadInventoryPdf = async () => {
     setDownloading(true);
@@ -1062,13 +1109,15 @@ function ReportsPage({ card }: { card: string }) {
   };
 
   return (
-    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-      <Card className={card}>
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+      <Card className={`${card} xl:col-span-2`}>
         <CardContent className="p-6">
-          <h2 className="mb-2 text-xl font-semibold">Report A</h2>
-          <p>Lagerbestandsbericht anzeigen oder exportieren.</p>
+          <h2 className="mb-2 text-xl font-semibold">Lagerbestandsbericht</h2>
+          <p className={`max-w-2xl text-sm ${mutedText}`}>
+            Erzeugt einen PDF-Bericht mit der aktuellen Verteilung des Lagerbestands nach Kategorien.
+          </p>
           <Button className="mt-4" onClick={downloadInventoryPdf} disabled={downloading}>
-            {downloading ? "Erstelle PDF…" : "Report generieren"}
+            {downloading ? "PDF wird erstellt…" : "PDF exportieren"}
           </Button>
           {downloadError && (
             <p className="mt-2 text-sm text-red-400">Fehler: {downloadError}</p>
@@ -1078,9 +1127,11 @@ function ReportsPage({ card }: { card: string }) {
 
       <Card className={card}>
         <CardContent className="p-6">
-          <h2 className="mb-2 text-xl font-semibold">Report B</h2>
-          <p>Bestandsentwicklung als Grafik anzeigen.</p>
-          <Button className="mt-4">Grafik anzeigen</Button>
+          <h2 className="mb-2 text-xl font-semibold">Bestandsentwicklung</h2>
+          <p className={`text-sm ${mutedText}`}>
+            Die wichtigsten Verläufe siehst du bereits im Dashboard. Weitere Berichte können hier ergänzt werden.
+          </p>
+          <Button className="mt-4" variant="outline" onClick={onOpenDashboard}>Zum Dashboard</Button>
         </CardContent>
       </Card>
     </div>
@@ -1326,7 +1377,7 @@ function OrdersPage({
             <div className={`rounded-xl border p-4 ${dark ? "border-gray-700 bg-gray-950" : "border-gray-300 bg-white"}`}>
               <div className="mb-1 text-sm font-semibold">Nachbestellung anlegen</div>
               <p className={`mb-3 text-sm ${mutedText}`}>
-                Bestehende Buecher neu bestellen und offen verfolgen.
+                Bestehende Bücher neu bestellen und offen verfolgen.
               </p>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <select
@@ -1394,7 +1445,7 @@ function OrdersPage({
             <div className={`rounded-xl border p-4 ${tableBorder}`}>
               <h3 className="mb-1 text-base font-semibold">Erstbestellung anlegen</h3>
               <p className={`mb-4 text-sm ${mutedText}`}>
-                Lege einen neuen Titel an. Die Erstmenge landet als offene Bestellung und wird spaeter im Wareneingang eingebucht.
+                Lege einen neuen Titel an. Die Erstmenge landet als offene Bestellung und wird später im Wareneingang eingebucht.
               </p>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <input className={formInputClass} placeholder="Name *" value={bookDraft.name} onChange={(e) => setBookDraft((prev) => ({ ...prev, name: e.target.value }))} />
@@ -1431,60 +1482,62 @@ function OrdersPage({
               <h3 className="text-base font-semibold">Offene Bestellungen</h3>
               <span className={`text-sm ${mutedText}`}>{openOrders.length} offen</span>
             </div>
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className={`border-b ${tableBorder} text-xs uppercase ${tableHeadText}`}>
-                  <th className="py-2">Lieferant</th>
-                  <th>Buch</th>
-                  <th>Bestellt</th>
-                  <th>Offen</th>
-                  <th>Preis</th>
-                  <th>Lieferung</th>
-                </tr>
-              </thead>
-              <tbody>
-                {openOrders.length === 0 && (
-                  <tr>
-                    <td className={`py-4 ${mutedText}`} colSpan={6}>
-                      Aktuell keine offenen Bestellungen.
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead>
+                  <tr className={`border-b ${tableBorder} text-xs uppercase ${tableHeadText}`}>
+                    <th className="py-2">Lieferant</th>
+                    <th>Buch</th>
+                    <th>Bestellt</th>
+                    <th>Offen</th>
+                    <th>Preis</th>
+                    <th>Lieferung</th>
                   </tr>
-                )}
-                {openOrders.map((order) => {
-                  const remainingQuantity = order.quantity - order.deliveredQuantity;
-                  return (
-                    <tr key={order.id} className={`border-b ${tableBorder} last:border-b-0`}>
-                      <td className="py-2">{order.supplier}</td>
-                      <td>
-                        <div>{order.bookName}</div>
-                        <div className={`text-xs ${mutedText}`}>{order.status}</div>
-                      </td>
-                      <td>{order.quantity}</td>
-                      <td>{remainingQuantity}</td>
-                      <td>{order.unitPrice != null ? `${order.unitPrice.toFixed(2)} EUR` : "-"}</td>
-                      <td className="py-2">
-                        <div className="flex items-center gap-2">
-                          <input
-                            className={`${formInputClass} h-9 w-24`}
-                            type="number"
-                            min={1}
-                            max={remainingQuantity}
-                            placeholder={String(remainingQuantity)}
-                            value={receivedDrafts[order.id] ?? ""}
-                            onChange={(e) =>
-                              setReceivedDrafts((prev) => ({ ...prev, [order.id]: e.target.value }))
-                            }
-                          />
-                          <Button size="sm" onClick={() => receiveOrder(order.id)}>
-                            Als angekommen
-                          </Button>
-                        </div>
+                </thead>
+                <tbody>
+                  {openOrders.length === 0 && (
+                    <tr>
+                      <td className={`py-4 ${mutedText}`} colSpan={6}>
+                        Aktuell keine offenen Bestellungen.
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  )}
+                  {openOrders.map((order) => {
+                    const remainingQuantity = order.quantity - order.deliveredQuantity;
+                    return (
+                      <tr key={order.id} className={`border-b ${tableBorder} last:border-b-0`}>
+                        <td className="py-2">{order.supplier}</td>
+                        <td>
+                          <div>{order.bookName}</div>
+                          <div className={`text-xs ${mutedText}`}>{order.status}</div>
+                        </td>
+                        <td>{order.quantity}</td>
+                        <td>{remainingQuantity}</td>
+                        <td>{order.unitPrice != null ? `${order.unitPrice.toFixed(2)} EUR` : "-"}</td>
+                        <td className="py-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              className={`${formInputClass} h-9 w-24`}
+                              type="number"
+                              min={1}
+                              max={remainingQuantity}
+                              placeholder={String(remainingQuantity)}
+                              value={receivedDrafts[order.id] ?? ""}
+                              onChange={(e) =>
+                                setReceivedDrafts((prev) => ({ ...prev, [order.id]: e.target.value }))
+                              }
+                            />
+                            <Button size="sm" onClick={() => receiveOrder(order.id)}>
+                              Als angekommen markieren
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -1546,44 +1599,46 @@ function GoodsInPage({
         <CardContent className="space-y-4 p-6">
           <h2 className="text-xl font-semibold">Wareneingang</h2>
           <p className={`text-sm ${mutedText}`}>
-            Hier landen nur Lieferungen, die bereits angekommen sind und noch ins Lager eingebucht werden muessen.
+            Hier landen nur Lieferungen, die bereits angekommen sind und noch ins Lager eingebucht werden müssen.
           </p>
           {bookingError ? <p className="text-sm text-red-400">{bookingError}</p> : null}
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className={`border-b ${tableBorder} text-xs uppercase ${tableHeadText}`}>
-                <th className="py-2">Lieferant</th>
-                <th>Buch</th>
-                <th>Menge</th>
-                <th>Preis</th>
-                <th>Ankunft</th>
-                <th className="text-right">Aktion</th>
-              </tr>
-            </thead>
-            <tbody>
-              {incomingDeliveries.length === 0 && (
-                <tr>
-                  <td className={`py-4 ${mutedText}`} colSpan={6}>
-                    Aktuell warten keine Lieferungen auf Einbuchung.
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead>
+                <tr className={`border-b ${tableBorder} text-xs uppercase ${tableHeadText}`}>
+                  <th className="py-2">Lieferant</th>
+                  <th>Buch</th>
+                  <th>Menge</th>
+                  <th>Preis</th>
+                  <th>Ankunft</th>
+                  <th className="text-right">Aktion</th>
                 </tr>
-              )}
-              {incomingDeliveries.map((delivery) => (
-                <tr key={delivery.id} className={`border-b ${tableBorder} last:border-b-0`}>
-                  <td className="py-2">{delivery.supplier}</td>
-                  <td>{delivery.bookName}</td>
-                  <td>{delivery.quantity}</td>
-                  <td>{delivery.unitPrice.toFixed(2)} EUR</td>
-                  <td>{new Date(delivery.receivedAt).toLocaleString("de-AT")}</td>
-                  <td className="text-right">
-                    <Button size="sm" onClick={() => bookIncomingDelivery(delivery.id)}>
-                      Einbuchen
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {incomingDeliveries.length === 0 && (
+                  <tr>
+                    <td className={`py-4 ${mutedText}`} colSpan={6}>
+                      Aktuell warten keine Lieferungen auf Einbuchung.
+                    </td>
+                  </tr>
+                )}
+                {incomingDeliveries.map((delivery) => (
+                  <tr key={delivery.id} className={`border-b ${tableBorder} last:border-b-0`}>
+                    <td className="py-2">{delivery.supplier}</td>
+                    <td>{delivery.bookName}</td>
+                    <td>{delivery.quantity}</td>
+                    <td>{delivery.unitPrice.toFixed(2)} EUR</td>
+                    <td>{new Date(delivery.receivedAt).toLocaleString("de-AT")}</td>
+                    <td className="text-right">
+                      <Button size="sm" onClick={() => bookIncomingDelivery(delivery.id)}>
+                        Einbuchen
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -1761,7 +1816,7 @@ function GoodsOutPage({
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-xl font-semibold">Verkauf Mobile</h2>
-                <p className={`text-sm ${mutedText}`}>Tablet-Ansicht fuer schnellen Verkauf im Store</p>
+                <p className={`text-sm ${mutedText}`}>Tablet-Ansicht für den schnellen Verkauf an der Kasse</p>
               </div>
               <Button variant="outline" onClick={() => setMobileMode(false)}>
                 Schließen
@@ -1780,7 +1835,7 @@ function GoodsOutPage({
                     setMobilePadField("quantity");
                   }}
                 >
-                  <option value="">Buch aus Lager waehlen</option>
+                  <option value="">Buch aus dem Lager wählen</option>
                   {books.map((book) => (
                     <option key={book.id} value={book.id}>
                       {book.name} ({book.quantity} Stk.)
@@ -1918,7 +1973,7 @@ function GoodsOutPage({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-semibold">Verkauf</h2>
             <Button variant="outline" onClick={() => setMobileMode((prev) => !prev)}>
-              {mobileMode ? "Desktop Mode" : "Mobile Mode"}
+              {mobileMode ? "Standardansicht" : "Kassenansicht"}
             </Button>
           </div>
           <div className={mobileMode ? "grid grid-cols-1 gap-4" : "grid grid-cols-1 gap-3 md:grid-cols-2"}>
@@ -1927,7 +1982,7 @@ function GoodsOutPage({
               value={draft.bookId}
               onChange={(e) => setDraft((prev) => ({ ...prev, bookId: e.target.value, unitPrice: "" }))}
             >
-              <option value="">Buch aus Lager waehlen</option>
+              <option value="">Buch aus dem Lager wählen</option>
               {books.map((book) => (
                 <option key={book.id} value={book.id}>
                   {book.name} ({book.quantity} Stk.)
@@ -2016,42 +2071,44 @@ function GoodsOutPage({
                 ))}
               </div>
             ) : (
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className={`border-b ${tableBorder} text-xs uppercase ${tableHeadText}`}>
-                    <th className="py-2">Datum</th>
-                    <th>Buch</th>
-                    <th>Art</th>
-                    <th>Grund</th>
-                    <th>Menge</th>
-                    <th>Preis/Stk.</th>
-                    <th>Gesamt</th>
-                    <th className="text-right">Aktion</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {salesLog.map((entry) => (
-                    <tr key={entry.id} className={`border-b ${tableBorder} last:border-b-0`}>
-                      <td className="py-2">{new Date(entry.createdAt).toLocaleString("de-AT")}</td>
-                      <td>{entry.bookName}</td>
-                      <td>{entry.type}</td>
-                      <td>{entry.reason}</td>
-                      <td>{entry.quantity}</td>
-                      <td>{entry.unitPrice.toFixed(2)} EUR</td>
-                      <td className={entry.total < 0 ? "text-amber-400" : ""}>{entry.total.toFixed(2)} EUR</td>
-                      <td className="text-right">
-                        {entry.type === "Verkauf" ? (
-                          <Button size="sm" variant="outline" onClick={() => startReturnForSale(entry)}>
-                            Retournieren
-                          </Button>
-                        ) : (
-                          <span className={`text-xs ${mutedText}`}>Bereits Retoure</span>
-                        )}
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead>
+                    <tr className={`border-b ${tableBorder} text-xs uppercase ${tableHeadText}`}>
+                      <th className="py-2">Datum</th>
+                      <th>Buch</th>
+                      <th>Art</th>
+                      <th>Grund</th>
+                      <th>Menge</th>
+                      <th>Preis/Stk.</th>
+                      <th>Gesamt</th>
+                      <th className="text-right">Aktion</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {salesLog.map((entry) => (
+                      <tr key={entry.id} className={`border-b ${tableBorder} last:border-b-0`}>
+                        <td className="py-2">{new Date(entry.createdAt).toLocaleString("de-AT")}</td>
+                        <td>{entry.bookName}</td>
+                        <td>{entry.type}</td>
+                        <td>{entry.reason}</td>
+                        <td>{entry.quantity}</td>
+                        <td>{entry.unitPrice.toFixed(2)} EUR</td>
+                        <td className={entry.total < 0 ? "text-amber-400" : ""}>{entry.total.toFixed(2)} EUR</td>
+                        <td className="text-right">
+                          {entry.type === "Verkauf" ? (
+                            <Button size="sm" variant="outline" onClick={() => startReturnForSale(entry)}>
+                              Retournieren
+                            </Button>
+                          ) : (
+                            <span className={`text-xs ${mutedText}`}>Bereits Retoure</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </CardContent>
@@ -2143,7 +2200,7 @@ function SuppliersPage({
             />
             <div className="md:col-span-2">
               <Button onClick={createSupplier} disabled={creating || draft.name.trim() === ""}>
-                {creating ? "Speichere Lieferant..." : "Lieferant anlegen"}
+                {creating ? "Lieferant wird gespeichert…" : "Lieferant anlegen"}
               </Button>
               {supplierError ? <span className="ml-3 text-sm text-red-400">{supplierError}</span> : null}
             </div>
@@ -2214,7 +2271,7 @@ function SettingsPage({
             <h3 className="mb-3 font-semibold">Lageranzeige</h3>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <label className={labelClass}>
-                Low-Stock-Schwelle
+                Mindestbestand
                 <input
                   className={inputClass}
                   type="number"
@@ -2231,19 +2288,9 @@ function SettingsPage({
 
             </div>
 
-            <label className={`mt-4 flex items-center gap-2 ${labelClass}`}>
-              <input
-                type="checkbox"
-                checked={settings.compactTable}
-                onChange={(e) =>
-                  setSettings((prev) => ({
-                    ...prev,
-                    compactTable: e.target.checked,
-                  }))
-                }
-              />
-              Kompakte Tabellenansicht im Lager
-            </label>
+            <p className={`mt-4 text-sm ${labelClass}`}>
+              Bücher mit niedrigem Bestand werden in der Lageransicht automatisch hervorgehoben.
+            </p>
           </div>
 
           <div className={sectionClass}>
@@ -2279,6 +2326,11 @@ function SettingsPage({
               />
               Automatisches Aktualisieren der Datenansichten
             </label>
+            <p className={`mb-4 text-sm ${labelClass}`}>
+              Sinnvoll, wenn Bestände parallel in einer anderen Browser-Session oder direkt über die API geändert
+              werden. Für die normale Einzelplatz-Nutzung bringt es meist wenig und erzeugt nur zusätzliche
+              Hintergrundabfragen.
+            </p>
 
             <label className={labelClass}>
               Aktualisierungsintervall (Sekunden)

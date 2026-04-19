@@ -1,19 +1,23 @@
 services:
   backend:
-    image: python:3.12-slim
+    build:
+      context: ./src1/backend
+      dockerfile: Dockerfile
     container_name: buchhandlung-backend
     restart: unless-stopped
     working_dir: /app
     volumes:
       - ./src1/backend:/app
-    command: >
-      sh -c "pip install --no-cache-dir -e . &&
-      uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    environment:
+      PYTHONPATH: /app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
 
   frontend:
-    image: node:22-alpine
+    build:
+      context: ./src1/frontend
+      dockerfile: Dockerfile
     container_name: buchhandlung-frontend
     restart: unless-stopped
     working_dir: /app
@@ -22,7 +26,6 @@ services:
       - /app/node_modules
     depends_on:
       - backend
-    command: >
-      sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
+    command: npm run dev -- --host 0.0.0.0 --port 5173
     ports:
       - "5173:5173"
