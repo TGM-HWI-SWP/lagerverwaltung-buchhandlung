@@ -43,35 +43,7 @@ Technischer Stack:
 ├── src1/
 │   ├── backend/
 │   │   ├── app/
-│   │   │   ├── api/          # FastAPI-Endpoints (thin HTTP layer)
-│   │   │   ├── adapters/     # SQLAlchemy-Repositories
-│   │   │   ├── contracts/    # Ports/Interfaces
-│   │   │   ├── core/         # Config, Auth, Time helpers
-│   │   │   ├── db/           # Models, Schemas, Session
-│   │   │   ├── services/     # Business Logic
-│   │   │   └── main.py       # FastAPI-App & Routes
-│   │   └── tests/
-│   └── frontend/
-│       ├── src/
-│       │   ├── api/          # API Client
-│       │   ├── features/     # Feature-Komponenten (inventory, ordering, sales, …)
-│       │   ├── components/   # Wiederverwendbare UI-Bausteine
-│       │   ├── lib/          # Mappers, utils
-│       │   ├── types.ts      # TypeScript-Typen
-│       │   └── App.tsx       # Hauptkomponente (Routing + State)
-│       └── vite.config.ts
-├── docs/
-├── docker-compose.yml
-└── README.md
-```
-
-## Projektstruktur
-
-```text
-.
-├── src1/
-│   ├── backend/
-│   │   ├── app/
+│   │   │   ├── core/         # Config/Auth/Errors/Time
 │   │   │   ├── api/
 │   │   │   ├── adapters/
 │   │   │   ├── contracts/
@@ -79,7 +51,11 @@ Technischer Stack:
 │   │   │   └── services/
 │   │   └── tests/
 │   └── frontend/
-│       └── src/
+│       ├── src/
+│       │   ├── features/     # Pages (Dashboard, Lager, Verkauf, ...)
+│       │   ├── components/
+│       │   └── api/
+│       └── vite.config.ts
 ├── docs/
 └── docker-compose.yml
 ```
@@ -110,11 +86,11 @@ Voraussetzung: Python 3.11 oder neuer
 cd src1/backend
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -e .
+pip install -e ".[dev]"
 uvicorn app.main:app --reload --port 8000
 ```
 
-Das `-e .` installiert das Paket aus `pyproject.toml` (korrekte Abhängigkeiten: fastapi, uvicorn, sqlalchemy, pydantic, matplotlib).
+`pip install -e ".[dev]"` installiert Backend + Dev-Tools (z. B. `pytest`, `httpx`).
 
 #### Frontend starten
 
