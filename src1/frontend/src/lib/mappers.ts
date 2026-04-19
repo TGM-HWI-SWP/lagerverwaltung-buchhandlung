@@ -61,11 +61,23 @@ export function mapIncomingDeliveryApi(delivery: IncomingDeliveryApi): IncomingD
 
 export function parseSaleEntry(movement: MovementApi): SaleEntry | null {
   const reason = movement.reason?.trim() ?? "";
-  if (reason.startsWith("Verkauf:")) {
-    const detail = reason.slice("Verkauf:".length).trim() || "Ohne Grund";
-    const unitPriceMatch = detail.match(/\[price=([0-9]+(?:\.[0-9]+)?)\]$/);
+  const parseReasonMeta = (detail: string) => {
+    const unitPriceMatch = detail.match(/\[price=([0-9]+(?:\.[0-9]+)?)\]/);
+    const discountMatch = detail.match(/\[discount=([0-9]+(?:\.[0-9]+)?)\]/);
     const unitPrice = unitPriceMatch ? Number(unitPriceMatch[1]) : 0;
-    const cleanReason = detail.replace(/\s*\[price=[0-9]+(?:\.[0-9]+)?\]$/, "").trim() || "Ohne Grund";
+    const discountAmount = discountMatch ? Number(discountMatch[1]) : 0;
+    const cleanReason = detail
+      .replace(/\s*\[price=[0-9]+(?:\.[0-9]+)?\]/g, "")
+      .replace(/\s*\[discount=[0-9]+(?:\.[0-9]+)?\]/g, "")
+      .trim() || "Ohne Grund";
+    return { unitPrice, discountAmount, cleanReason };
+  };
+
+  const normalizedReason = reason.replace(/^Verkauf von\s+/i, "Verkauf: ").replace(/^Retoure von\s+/i, "Retoure: ");
+
+  if (normalizedReason.startsWith("Verkauf:")) {
+    const detail = normalizedReason.slice("Verkauf:".length).trim() || "Ohne Grund";
+    const { unitPrice, discountAmount, cleanReason } = parseReasonMeta(detail);
     const quantity = Math.abs(movement.quantity_change);
     return {
       id: movement.id,
@@ -74,16 +86,15 @@ export function parseSaleEntry(movement: MovementApi): SaleEntry | null {
       type: "Verkauf",
       quantity,
       unitPrice,
-      total: unitPrice * quantity,
+      total: unitPrice * quantity - discountAmount,
       createdAt: movement.timestamp ?? new Date().toISOString(),
       reason: cleanReason,
+      discountAmount,
     };
   }
-  if (reason.startsWith("Retoure:")) {
-    const detail = reason.slice("Retoure:".length).trim() || "Ohne Grund";
-    const unitPriceMatch = detail.match(/\[price=([0-9]+(?:\.[0-9]+)?)\]$/);
-    const unitPrice = unitPriceMatch ? Number(unitPriceMatch[1]) : 0;
-    const cleanReason = detail.replace(/\s*\[price=[0-9]+(?:\.[0-9]+)?\]$/, "").trim() || "Ohne Grund";
+  if (normalizedReason.startsWith("Retoure:")) {
+    const detail = normalizedReason.slice("Retoure:".length).trim() || "Ohne Grund";
+    const { unitPrice, cleanReason } = parseReasonMeta(detail);
     const quantity = Math.abs(movement.quantity_change);
     return {
       id: movement.id,
@@ -95,6 +106,7 @@ export function parseSaleEntry(movement: MovementApi): SaleEntry | null {
       total: -unitPrice * quantity,
       createdAt: movement.timestamp ?? new Date().toISOString(),
       reason: cleanReason,
+      discountAmount: 0,
     };
   }
   return null;

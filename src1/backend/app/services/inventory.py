@@ -11,6 +11,7 @@ from app.core.exceptions import ConflictError
 from app.core.time import utc_now_iso
 from app.db.models import Book, Movement
 from app.db.schemas import MovementSchema
+from app.services.activity_log import write_activity_log
 
 
 class InventoryService:
@@ -71,6 +72,19 @@ class InventoryService:
 
         # Ensure atomicity for "movement + book quantity change"
         self._db.add(db_movement)
+        write_activity_log(
+            self._db,
+            action="MOVEMENT_CREATED",
+            entity_type="movement",
+            entity_id=db_movement.id,
+            performed_by=payload.get("performed_by"),
+            changes=(
+                f'{{"book_id":"{db_movement.book_id}","movement_type":"{db_movement.movement_type}",'
+                f'"quantity_change":{db_movement.quantity_change}}}'
+            ),
+            reason=db_movement.reason,
+            timestamp=payload["timestamp"],
+        )
         self._db.commit()
         self._db.refresh(db_movement)
         return db_movement
