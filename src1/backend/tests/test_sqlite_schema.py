@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SQL_FILE = ROOT / "app" / "db" / "buchhadlung.sql"
+SQL_FILE = ROOT / "app" / "db" / "buchhandlung.sql"
 
 
 def execute_sql_file(conn: sqlite3.Connection) -> None:

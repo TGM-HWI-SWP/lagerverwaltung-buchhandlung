@@ -131,7 +131,7 @@ Wichtige Dateien:
 - `models.py`
 - `schemas.py`
 - `session.py`
-- `buchhadlung.sql`
+- `buchhandlung.sql`
 
 ## Frontend-Architektur
 

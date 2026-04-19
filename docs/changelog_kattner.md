@@ -149,6 +149,31 @@ Persönliches Changelog für Kattner, Rolle: Backend/Integration (FastAPI ↔ Re
 - acd2c33 Move supplier logic into services
 ```
 
+---
+
+## [v0.5] - 2026-04-19
+
+### Implementiert
+- Repo wieder lauffähig gemacht (Indentation-/Syntax-Fixes in Backend-Modulen).
+- Seed-SQL-Dateiname korrigiert: `buchhadlung.sql` → `buchhandlung.sql` (inkl. Doku/Tests).
+- API-Härtung:
+  - konsistentes Error-Handling über globale Exception-Handler (409 bei Konflikten)
+  - Pagination-Clamp (`offset/limit`, max 100) für Listenendpunkte
+  - Lagerbewegungen als **immutable**: Update/Delete liefert `409 Conflict`, Korrekturen via `CORRECTION`.
+- Frontend-Struktur verbessert:
+  - `MenuButton` extrahiert
+  - globale `ErrorBoundary` eingebaut
+  - `formatCurrency` / `formatDate` Utilities ergänzt
+
+### Dokumentation
+- Quickstart für Backend-venv ergänzt (`pip install -e ".[dev]"`).
+- Known-Issues aktualisiert (npm EACCES, Movement-Immutability).
+
+### Commits
+```
+- (noch nicht committed in dieser Runde)
+```
+
 ### Mergekonflikt(e)
 - Keine
 

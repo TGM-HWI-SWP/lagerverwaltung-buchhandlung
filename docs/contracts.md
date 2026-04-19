@@ -20,10 +20,12 @@ CRUD-Zugriffe auf Bücher (Persistenz-agnostisch).
 ### Methoden (Signaturen)
 
 - `list() -> list[Book]`
+- `list_paginated(offset: int = 0, limit: int = 50) -> list[Book]`
 - `get(book_id: str) -> Book | None`
 - `create(book: BookSchema) -> Book`
 - `update(book_id: str, book: BookSchema) -> Book | None`
 - `delete(book_id: str) -> bool`
+- `count() -> int`
 
 ### Referenz-Implementierung
 - `SqlAlchemyBookRepository` (`app/adapters/sqlalchemy_repositories.py`)
@@ -40,10 +42,12 @@ Persistenz von Lagerbewegungen (Movements).
 ### Methoden (Signaturen)
 
 - `list() -> list[Movement]`
+- `list_paginated(offset: int = 0, limit: int = 50) -> list[Movement]`
 - `get(movement_id: str) -> Movement | None`
 - `create(movement: MovementSchema) -> Movement`
 - `update(movement_id: str, movement: MovementSchema) -> Movement | None`
 - `delete(movement_id: str) -> bool`
+- `count() -> int`
 
 ### Referenz-Implementierung
 - `SqlAlchemyMovementRepository` (`app/adapters/sqlalchemy_repositories.py`)
@@ -76,8 +80,10 @@ Services sind keine “Ports” im strengen Sinn, aber die **stabile API** inner
 - Bestand darf nicht negativ werden
 - Beim Anlegen einer Bewegung wird der zugehörige `Book.quantity` atomar angepasst
 
-**Wichtig:** `update_movement` / `delete_movement` passen aktuell den Bestand **nicht** rückwirkend an.
-Wenn das fachlich benötigt ist, wird ein “compensating movements” Ansatz empfohlen.
+**Wichtig:** Lagerbewegungen sind **unveränderlich**.
+
+- `PUT /movements/{id}` und `DELETE /movements/{id}` liefern `409 Conflict`
+- Korrekturen erfolgen über neue `CORRECTION`-Bewegungen
 
 ### SupplierService
 

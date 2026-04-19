@@ -8,21 +8,24 @@ Die Anwendung ist für ein Schulprojekt in einem brauchbaren Zustand, hat aber e
 
 ## Bekannte Schwachstellen
 
-### 1. Große zentrale Frontend-Datei
+### 1. Frontend-Paketinstallation kann an Rechten scheitern
 
-- `src1/frontend/src/App.tsx` ist inzwischen sehr umfangreich
-- mehrere Verantwortlichkeiten liegen noch in einer Datei
-- das erschwert Wartung, Review und gezielte UI-Tests
+- `npm install` kann fehlschlagen, wenn `src1/frontend/node_modules` oder Unterordner falsche Owner/Rechte haben (z. B. durch vorherige `sudo`-Runs)
+- Fehlerbild: `EACCES: permission denied, mkdir ... node_modules/...`
+- Fix (Linux): Owner auf den aktuellen User setzen und neu installieren
+  - `sudo chown -R $USER:$USER src1/frontend/node_modules src1/frontend/package-lock.json`
+  - danach `npm install`
 
 ### 2. Teilweise breite API-Module
 
 - Lieferanten-, Bestell- und Wareneingangslogik liegt aktuell stark in `src1/backend/app/api/suppliers.py`
 - fachlich wäre eine stärkere Trennung in eigene Service-/API-Module sauberer
 
-### 3. Movements werden beim Update/Löschen nicht fachlich neu verrechnet
+### 3. Lagerbewegungen sind unveränderlich
 
-- `update_movement` und `delete_movement` passen den Lagerbestand aktuell nicht rückwirkend an
-- das Verhalten ist dokumentiert, aber fachlich limitiert
+- Lagerbewegungen sind jetzt bewusst **immutable**
+- `PUT /movements/{id}` und `DELETE /movements/{id}` liefern `409 Conflict`
+- Korrekturen erfolgen über neue `CORRECTION`-Bewegungen
 
 ### 4. Root-Repo enthält noch Legacy-Artefakte
 
@@ -36,7 +39,7 @@ Diese Dinge sind derzeit nicht umgesetzt:
 
 - Benutzerverwaltung oder Authentifizierung
 - Rollen-/Rechtesystem
-- Pagination oder größere Listenoptimierung
+- Pagination ist für die zentralen Listenendpunkte vorhanden (offset/limit)
 - Postgres oder andere produktionsnahe DB statt SQLite
 - ausgebaute automatisierte Frontend-Tests
 

@@ -16,6 +16,10 @@ import matplotlib.pyplot as plt                                                 
 from matplotlib.backends.backend_pdf import PdfPages                            # PDF-Export
 
 from app.core.config import settings                                            # App-Konfiguration
+from app.core.auth import verify_api_key                                        # Authentication
+# ConflictError is handled by a global exception handler
+from app.core.errors import install_error_handlers
+from app.core.migrations import ensure_schema
 from app.db.models import Base                                                  # DB-Modelle
 from app.db.models import Book
 from app.db.session import engine, get_db                                       # DB-Verbindung
@@ -30,7 +34,14 @@ from app.db.schemas import (                                                    
     IncomingDeliverySchema,
     BookIncomingDeliveryRequest,
 )
-from app.api import books, inventory, suppliers                                 # CRUD-Logik
+from app.api import books, inventory, suppliers, activity                             # CRUD-Logik + activity
+
+
+def _clamp_pagination(offset: int, limit: int, *, max_limit: int = 100) -> tuple[int, int]:
+    offset = max(0, int(offset))
+    limit = max(1, int(limit))
+    limit = min(limit, max_limit)
+    return offset, limit
 
 
 Base.metadata.create_all(bind=engine)                                           # Tabellen erstellen
@@ -53,22 +64,40 @@ def _ensure_sqlite_schema():
         if "book_suppliers" not in table_names:
             conn.execute(
                 text(
-                    """
-                    CREATE TABLE book_suppliers (
-                        id VARCHAR PRIMARY KEY,
-                        book_id VARCHAR NOT NULL,
-                        supplier_id VARCHAR NOT NULL,
-                        supplier_sku VARCHAR NOT NULL DEFAULT '',
-                        is_primary BOOLEAN NOT NULL DEFAULT 0,
-                        last_purchase_price NUMERIC(10, 2) NOT NULL DEFAULT 0,
-                        created_at VARCHAR NOT NULL,
-                        updated_at VARCHAR NOT NULL,
-                        CONSTRAINT uq_book_suppliers_book_supplier UNIQUE (book_id, supplier_id),
-                        FOREIGN KEY(book_id) REFERENCES books (id),
-                        FOREIGN KEY(supplier_id) REFERENCES suppliers (id),
-                        CONSTRAINT ck_book_suppliers_last_price_non_negative CHECK (last_purchase_price >= 0)
-                    )
-                    """
+                     """
+                     CREATE TABLE book_suppliers (
+                         id VARCHAR PRIMARY KEY,
+                         book_id VARCHAR NOT NULL,
+                         supplier_id VARCHAR NOT NULL,
+                         supplier_sku VARCHAR NOT NULL DEFAULT '',
+                         is_primary BOOLEAN NOT NULL DEFAULT 0,
+                         last_purchase_price NUMERIC(10, 2) NOT NULL DEFAULT 0,
+                         created_at VARCHAR NOT NULL,
+                         updated_at VARCHAR NOT NULL,
+                         CONSTRAINT uq_book_suppliers_book_supplier UNIQUE (book_id, supplier_id),
+                         FOREIGN KEY(book_id) REFERENCES books (id),
+                         FOREIGN KEY(supplier_id) REFERENCES suppliers (id),
+                         CONSTRAINT ck_book_suppliers_last_price_non_negative CHECK (last_purchase_price >= 0)
+                     )
+                     """
+                )
+            )
+
+        if "activity_logs" not in table_names:
+            conn.execute(
+                text(
+                     """
+                     CREATE TABLE activity_logs (
+                         id VARCHAR PRIMARY KEY,
+                         timestamp VARCHAR NOT NULL DEFAULT (datetime('now', 'localtime')),
+                         performed_by VARCHAR NOT NULL DEFAULT 'system',
+                         action VARCHAR NOT NULL,
+                         entity_type VARCHAR NOT NULL,
+                         entity_id VARCHAR NOT NULL,
+                         changes TEXT,
+                         reason VARCHAR
+                     )
+                     """
                 )
             )
 
@@ -83,6 +112,9 @@ def _ensure_sqlite_schema():
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_incoming_deliveries_book_id ON incoming_deliveries (book_id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_book_suppliers_supplier_id ON book_suppliers (supplier_id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_book_suppliers_book_id ON book_suppliers (book_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_activity_logs_timestamp ON activity_logs (timestamp DESC)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_activity_logs_entity ON activity_logs (entity_type, entity_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_activity_logs_performed_by ON activity_logs (performed_by)"))
 
         rows = conn.execute(
             text(
@@ -164,7 +196,7 @@ def _ensure_default_supplier_data():
 
 def _seed_database():
     """Fügt Testdaten ein, wenn die Datenbank leer ist."""
-    sql_file = Path(__file__).parent / "db" / "buchhadlung.sql"
+    sql_file = Path(__file__).parent / "db" / "buchhandlung.sql"
     if not sql_file.exists():
         return
     with engine.connect() as conn:
@@ -183,7 +215,12 @@ _ensure_sqlite_schema()
 _seed_database()
 _ensure_default_supplier_data()
 
+# Explicit migration hook (currently no-op; keeps a clean seam for future extraction)
+ensure_schema()
+
 app = FastAPI(title=settings.app_name)                                          # App-Instanz
+
+install_error_handlers(app)
 
 app.add_middleware(
     CORSMiddleware,
@@ -216,9 +253,14 @@ def health():
 # ── Books ──────────────────────────────────────────────
 
 
-@app.get("/books", response_model=list[BookSchema])                             # Alle Bücher holen
-def read_books(db: Session = Depends(get_db)):
-    return books.get_all_books(db)
+@app.get("/books", response_model=list[BookSchema])  # Alle Bücher holen
+def read_books(
+    db: Session = Depends(get_db),
+    offset: int = 0,
+    limit: int = 50,
+):
+    offset, limit = _clamp_pagination(offset, limit)
+    return books.get_all_books(db, offset=offset, limit=limit)
 
 
 @app.get("/books/{book_id}", response_model=BookSchema)                         # Buch per ID holen
@@ -229,29 +271,42 @@ def read_book(book_id: str, db: Session = Depends(get_db)):
     return book
 
 
-@app.post("/books", response_model=BookSchema, status_code=201)                 # Buch anlegen
-def create_book(book: BookSchema, db: Session = Depends(get_db)):
+@app.post("/books", response_model=BookSchema, status_code=201)  # Buch anlegen
+def create_book(
+    book: BookSchema,
+    db: Session = Depends(get_db),
+    api_key: str = Depends(verify_api_key),
+):
     try:
         return books.create_book(db, book)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.put("/books/{book_id}", response_model=BookSchema)                         # Buch aktualisieren
-def update_book(book_id: str, book: BookSchema, db: Session = Depends(get_db)):
+@app.put("/books/{book_id}", response_model=BookSchema)  # Buch aktualisieren
+def update_book(
+    book_id: str,
+    book: BookSchema,
+    db: Session = Depends(get_db),
+    api_key: str = Depends(verify_api_key),
+):
     try:
         updated = books.update_book(db, book_id, book)
-        if updated is None:                                                     # Nicht gefunden
+        if updated is None:  # Nicht gefunden
             raise HTTPException(status_code=404, detail="Buch nicht gefunden")
         return updated
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.delete("/books/{book_id}")                                                 # Buch löschen
-def delete_book(book_id: str, db: Session = Depends(get_db)):
+@app.delete("/books/{book_id}")  # Buch löschen
+def delete_book(
+    book_id: str,
+    db: Session = Depends(get_db),
+    api_key: str = Depends(verify_api_key),
+):
     try:
-        if not books.delete_book(db, book_id):                                  # Nicht gefunden
+        if not books.delete_book(db, book_id):
             raise HTTPException(status_code=404, detail="Buch nicht gefunden")
         return {"detail": "Buch gelöscht"}
     except ValueError as exc:
@@ -261,9 +316,14 @@ def delete_book(book_id: str, db: Session = Depends(get_db)):
 # ── Movements ──────────────────────────────────────────
 
 
-@app.get("/movements", response_model=list[MovementSchema])                     # Alle Bewegungen holen
-def read_movements(db: Session = Depends(get_db)):
-    return inventory.get_all_movements(db)
+@app.get("/movements", response_model=list[MovementSchema])  # Alle Bewegungen holen
+def read_movements(
+    db: Session = Depends(get_db),
+    offset: int = 0,
+    limit: int = 50,
+):
+    offset, limit = _clamp_pagination(offset, limit)
+    return inventory.get_all_movements(db, offset=offset, limit=limit)
 
 
 @app.get("/movements/{movement_id}", response_model=MovementSchema)             # Bewegung per ID holen
@@ -274,30 +334,39 @@ def read_movement(movement_id: str, db: Session = Depends(get_db)):
     return movement
 
 
-@app.post("/movements", response_model=MovementSchema, status_code=201)         # Bewegung anlegen
-def create_movement(movement: MovementSchema, db: Session = Depends(get_db)):
+@app.post("/movements", response_model=MovementSchema, status_code=201)  # Bewegung anlegen
+def create_movement(
+    movement: MovementSchema,
+    db: Session = Depends(get_db),
+    api_key: str = Depends(verify_api_key),
+):
     try:
         return inventory.create_movement(db, movement)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.put("/movements/{movement_id}", response_model=MovementSchema)             # Bewegung aktualisieren
-def update_movement(movement_id: str, movement: MovementSchema, db: Session = Depends(get_db)):
-    try:
-        updated = inventory.update_movement(db, movement_id, movement)
-        if updated is None:                                                     # Nicht gefunden
-            raise HTTPException(status_code=404, detail="Bewegung nicht gefunden")
-        return updated
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+@app.put("/movements/{movement_id}", status_code=409)  # Bewegung aktualisieren
+def update_movement(
+    movement_id: str,
+    movement: MovementSchema,
+    api_key: str = Depends(verify_api_key),
+):
+    raise HTTPException(
+        status_code=409,
+        detail="Lagerbewegungen sind unveränderlich. Bitte eine neue CORRECTION-Bewegung anlegen.",
+    )
 
 
-@app.delete("/movements/{movement_id}")                                         # Bewegung löschen
-def delete_movement(movement_id: str, db: Session = Depends(get_db)):
-    if not inventory.delete_movement(db, movement_id):                          # Nicht gefunden
-        raise HTTPException(status_code=404, detail="Bewegung nicht gefunden")
-    return {"detail": "Bewegung gelöscht"}
+@app.delete("/movements/{movement_id}", status_code=409)  # Bewegung löschen
+def delete_movement(
+    movement_id: str,
+    api_key: str = Depends(verify_api_key),
+):
+    raise HTTPException(
+        status_code=409,
+        detail="Lagerbewegungen sind unveränderlich und können nicht gelöscht werden.",
+    )
 
 
 # ── Inventory ──────────────────────────────────────────
@@ -350,27 +419,27 @@ def inventory_pdf(db: Session = Depends(get_db)):
 # ── Suppliers ──────────────────────────────────────────
 
 
-@app.get("/suppliers", response_model=list[SupplierSchema])                     # Alle Lieferanten
-def read_suppliers(db: Session = Depends(get_db)):
-    return suppliers.get_all_suppliers(db)
+@app.get("/suppliers", response_model=list[SupplierSchema])  # Alle Lieferanten
+def read_suppliers(
+    db: Session = Depends(get_db),
+    offset: int = 0,
+    limit: int = 50,
+):
+    offset, limit = _clamp_pagination(offset, limit)
+    return suppliers.get_all_suppliers(db, offset=offset, limit=limit)
 
 
-@app.get("/suppliers/{supplier_id}", response_model=SupplierSchema)             # Lieferant per ID
+@app.get("/suppliers/{supplier_id}", response_model=SupplierSchema)  # Lieferant per ID
 def read_supplier(supplier_id: str, db: Session = Depends(get_db)):
     supplier = suppliers.get_supplier(db, supplier_id)
-    if supplier is None:                                                        # Nicht gefunden
+    if supplier is None:
         raise HTTPException(status_code=404, detail="Lieferant nicht gefunden")
     return supplier
 
 
-@app.post("/suppliers", response_model=SupplierSchema, status_code=201)         # Lieferant anlegen
-def create_supplier(supplier: SupplierSchema, db: Session = Depends(get_db)):
-    return suppliers.create_supplier(db, supplier)
-
-
 @app.get("/suppliers/{supplier_id}/stock", response_model=list[SupplierStockEntry])  # Lager des Lieferanten
 def read_supplier_stock(supplier_id: str, db: Session = Depends(get_db)):
-    if suppliers.get_supplier(db, supplier_id) is None:                         # Existenz pruefen
+    if suppliers.get_supplier(db, supplier_id) is None:
         raise HTTPException(status_code=404, detail="Lieferant nicht gefunden")
     return suppliers.get_supplier_stock(db, supplier_id)
 
@@ -380,6 +449,7 @@ def order_from_supplier(
     supplier_id: str,
     order: SupplierOrderRequest,
     db: Session = Depends(get_db),
+    api_key: str = Depends(verify_api_key),
 ):
     try:
         return suppliers.order_from_supplier(
@@ -393,47 +463,211 @@ def order_from_supplier(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.get("/purchase-orders", response_model=list[PurchaseOrderSchema])
-def read_purchase_orders(db: Session = Depends(get_db)):
-    return suppliers.get_all_purchase_orders(db)
-
-
-@app.post("/purchase-orders", response_model=PurchaseOrderSchema, status_code=201)
-def create_purchase_order(order: PurchaseOrderSchema, db: Session = Depends(get_db)):
-    try:
-        return suppliers.create_purchase_order(db, order)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/purchase-orders/{order_id}/receive", response_model=IncomingDeliverySchema, status_code=201)
-def receive_purchase_order(
-    order_id: str,
-    payload: ReceivePurchaseOrderRequest,
+@app.post("/suppliers", response_model=SupplierSchema, status_code=201)  # Lieferant anlegen
+def create_supplier(
+    supplier: SupplierSchema,
     db: Session = Depends(get_db),
+    api_key: str = Depends(verify_api_key),
 ):
-    try:
-        return suppliers.receive_purchase_order(db, order_id, payload.quantity)
-    except ValueError as exc:
-        detail = str(exc)
-        status = 404 if "nicht gefunden" in detail else 400
-        raise HTTPException(status_code=status, detail=detail) from exc
+    return suppliers.create_supplier(db, supplier)
+
+
+@app.get("/purchase-orders", response_model=list[PurchaseOrderSchema])
+def read_purchase_orders(
+    db: Session = Depends(get_db),
+    offset: int = 0,
+    limit: int = 50,
+):
+    offset, limit = _clamp_pagination(offset, limit)
+    return suppliers.get_all_purchase_orders(db, offset=offset, limit=limit)
 
 
 @app.get("/incoming-deliveries", response_model=list[IncomingDeliverySchema])
-def read_incoming_deliveries(db: Session = Depends(get_db)):
-    return suppliers.get_all_incoming_deliveries(db)
-
-
-@app.post("/incoming-deliveries/{delivery_id}/book", response_model=MovementSchema, status_code=201)
-def book_incoming_delivery(
-    delivery_id: str,
-    payload: BookIncomingDeliveryRequest,
+def read_incoming_deliveries(
     db: Session = Depends(get_db),
+    offset: int = 0,
+    limit: int = 50,
 ):
-    try:
-        return suppliers.book_incoming_delivery(db, delivery_id, payload.performed_by)
-    except ValueError as exc:
-        detail = str(exc)
-        status = 404 if "nicht gefunden" in detail else 400
-        raise HTTPException(status_code=status, detail=detail) from exc
+    offset, limit = _clamp_pagination(offset, limit)
+    return suppliers.get_all_incoming_deliveries(db, offset=offset, limit=limit)
+
+
+ # ── Activity Logs ───────────────────────────────────────
+
+
+@app.get("/activity-logs")
+def read_activity_logs(
+    db: Session = Depends(get_db),
+    offset: int = 0,
+    limit: int = 50,
+    entity_type: str | None = None,
+    entity_id: str | None = None,
+    performed_by: str | None = None,
+):
+    """Audit log entries with optional filtering."""
+    offset, limit = _clamp_pagination(offset, limit)
+    logs = activity.get_activity_logs(
+        db,
+        offset=offset,
+        limit=limit,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        performed_by=performed_by,
+    )
+    total = activity.count_activity_logs(
+        db,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        performed_by=performed_by,
+    )
+    return {"total": total, "offset": offset, "limit": limit, "logs": logs}
+
+
+ # ── Export ──────────────────────────────────────────────
+
+
+@app.get("/export/books")
+def export_books(db: Session = Depends(get_db)):
+    """Export all books as CSV."""
+    import csv
+    import io
+
+    all_books = books.get_all_books(db)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "ID",
+            "Name",
+            "Author",
+            "Description",
+            "Purchase Price",
+            "Selling Price",
+            "Quantity",
+            "SKU",
+            "Category",
+            "Supplier ID",
+            "Created At",
+            "Updated At",
+            "Notes",
+        ]
+    )
+    for b in all_books:
+        writer.writerow(
+            [
+                b.id,
+                b.name,
+                b.author,
+                b.description,
+                b.purchase_price,
+                b.sell_price,
+                b.quantity,
+                b.sku,
+                b.category,
+                b.supplier_id,
+                b.created_at,
+                b.updated_at,
+                b.notes or "",
+            ]
+        )
+    output.seek(0)
+
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode("utf-8")),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="books.csv"'},
+    )
+
+
+@app.get("/export/movements")
+def export_movements(db: Session = Depends(get_db)):
+    """Export all movements as CSV."""
+    import csv
+    import io
+
+    all_movements = inventory.get_all_movements(db)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "ID",
+            "Book ID",
+            "Book Name",
+            "Quantity Change",
+            "Movement Type",
+            "Reason",
+            "Timestamp",
+            "Performed By",
+        ]
+    )
+    for m in all_movements:
+        writer.writerow(
+            [
+                m.id,
+                m.book_id,
+                m.book_name,
+                m.quantity_change,
+                m.movement_type,
+                m.reason or "",
+                m.timestamp,
+                m.performed_by,
+            ]
+        )
+    output.seek(0)
+
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode("utf-8")),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="movements.csv"'},
+    )
+
+
+@app.get("/export/purchase-orders")
+def export_purchase_orders(db: Session = Depends(get_db)):
+    """Export all purchase orders as CSV."""
+    import csv
+    import io
+
+    all_orders = suppliers.get_all_purchase_orders(db)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "ID",
+            "Supplier ID",
+            "Supplier Name",
+            "Book ID",
+            "Book Name",
+            "Book SKU",
+            "Unit Price",
+            "Quantity",
+            "Delivered Quantity",
+            "Status",
+            "Created At",
+            "Delivered At",
+        ]
+    )
+    for o in all_orders:
+        writer.writerow(
+            [
+                o.id,
+                o.supplier_id,
+                o.supplier_name,
+                o.book_id,
+                o.book_name,
+                o.book_sku or "",
+                o.unit_price,
+                o.quantity,
+                o.delivered_quantity,
+                o.status,
+                o.created_at,
+                o.delivered_at or "",
+            ]
+        )
+    output.seek(0)
+
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode("utf-8")),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="purchase_orders.csv"'},
+    )

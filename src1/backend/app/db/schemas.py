@@ -297,3 +297,16 @@ class BookIncomingDeliveryRequest(BaseModel):
     def normalize_book_incoming_delivery_request(cls, value: str | None) -> str:
         normalized = (value or "").strip()
         return normalized or "system"
+
+
+class ActivityLogSchema(BaseModel):
+     model_config = ConfigDict(from_attributes=True)
+
+     id: str | None = None
+     timestamp: str
+     performed_by: str = "system"
+     action: str
+     entity_type: str
+     entity_id: str
+     changes: str | None = None
+     reason: str | None = None

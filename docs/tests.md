@@ -50,6 +50,11 @@ Das heißt:
 - aktuelle Tests brauchen `pytest` nicht
 - zukünftige API- und Integrationstests können mit `pytest` aufgebaut werden
 
+### Hinweis zur Umgebung
+
+Wenn `pip install -e ".[dev]"` in einem venv genutzt wird, stehen `pytest` und `httpx` zur Verfügung.
+Für CI/Schulprojekt reicht weiterhin der Schematest, solange keine API-Tests gepflegt werden.
+
 ## Empfohlene nächste Teststufen
 
 ### 1. Service-Tests

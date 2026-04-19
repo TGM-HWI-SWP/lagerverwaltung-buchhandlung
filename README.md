@@ -23,9 +23,47 @@ Die Anwendung deckt die wichtigsten Abläufe einer Buchhandlung ab:
 
 Technischer Stack:
 
-- Backend: FastAPI, SQLAlchemy, SQLite
-- Frontend: React, Vite, TypeScript
-- Diagramme/UI: Recharts, Tailwind
+- Backend: FastAPI, SQLAlchemy 2.0, SQLite, Pydantic v2
+- Frontend: React, Vite, TypeScript, TailwindCSS, Recharts
+- Diagramme/UI: Recharts, Lucide Icons
+
+## Neue Features (seit v0.4)
+
+- **Pagination** für alle List-Endpoints (`/books`, `/movements`, `/suppliers`, `/purchase-orders`, `/incoming-deliveries`) mit `offset`/`limit` Query-Parametern
+- **Activity Log** (`/activity-logs`) – Audit-Trail für alle Aktionen (CREATE, UPDATE, DELETE, Bestellungen, Lieferungen)
+- **API-Key-Authentifizierung** – Schreib-Endpoints benötigen einen API-Key (Header `X-API-Key`), Standard: `dev-key-123`
+- **CSV-Export** – Bücher, Bewegungen und Bestellungen können als CSV heruntergeladen werden (`/export/books`, `/export/movements`, `/export/purchase-orders`)
+- **Frontend-Refactoring** – `App.tsx` wurde in feature-basierte Komponenten aufgeteilt (`features/inventory`, `features/ordering`, `features/sales`, etc.)
+- **Einstellungen** – API-Key kann im Frontend unter "Einstellungen" gesetzt werden (wird im localStorage gespeichert)
+
+## Projektstruktur
+
+```text
+.
+├── src1/
+│   ├── backend/
+│   │   ├── app/
+│   │   │   ├── api/          # FastAPI-Endpoints (thin HTTP layer)
+│   │   │   ├── adapters/     # SQLAlchemy-Repositories
+│   │   │   ├── contracts/    # Ports/Interfaces
+│   │   │   ├── core/         # Config, Auth, Time helpers
+│   │   │   ├── db/           # Models, Schemas, Session
+│   │   │   ├── services/     # Business Logic
+│   │   │   └── main.py       # FastAPI-App & Routes
+│   │   └── tests/
+│   └── frontend/
+│       ├── src/
+│       │   ├── api/          # API Client
+│       │   ├── features/     # Feature-Komponenten (inventory, ordering, sales, …)
+│       │   ├── components/   # Wiederverwendbare UI-Bausteine
+│       │   ├── lib/          # Mappers, utils
+│       │   ├── types.ts      # TypeScript-Typen
+│       │   └── App.tsx       # Hauptkomponente (Routing + State)
+│       └── vite.config.ts
+├── docs/
+├── docker-compose.yml
+└── README.md
+```
 
 ## Projektstruktur
 
@@ -71,16 +109,12 @@ Voraussetzung: Python 3.11 oder neuer
 ```bash
 cd src1/backend
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -e .
 uvicorn app.main:app --reload --port 8000
 ```
 
-Windows:
-
-```bash
-.venv\Scripts\activate
-```
+Das `-e .` installiert das Paket aus `pyproject.toml` (korrekte Abhängigkeiten: fastapi, uvicorn, sqlalchemy, pydantic, matplotlib).
 
 #### Frontend starten
 
@@ -139,46 +173,53 @@ Wichtig:
 
 Das Seed-SQL liegt in:
 
-- [src1/backend/app/db/buchhadlung.sql](/home/smooth/code-projects/lagerverwaltung-buchhandlung/src1/backend/app/db/buchhadlung.sql)
+- [src1/backend/app/db/buchhandlung.sql](/home/smooth/code-projects/lagerverwaltung-buchhandlung/src1/backend/app/db/buchhandlung.sql)
 
 ## Wichtige Endpunkte
 
 ### Bücher
 
-- `GET /books`
+- `GET /books?offset=0&limit=50`
 - `GET /books/{book_id}`
-- `POST /books`
-- `PUT /books/{book_id}`
-- `DELETE /books/{book_id}`
+- `POST /books` (benötigt API-Key)
+- `PUT /books/{book_id}` (benötigt API-Key)
+- `DELETE /books/{book_id}` (benötigt API-Key)
 
 ### Lagerbewegungen
 
-- `GET /movements`
+- `GET /movements?offset=0&limit=50`
 - `GET /movements/{movement_id}`
-- `POST /movements`
-- `PUT /movements/{movement_id}`
-- `DELETE /movements/{movement_id}`
+- `POST /movements` (benötigt API-Key)
+- `PUT /movements/{movement_id}` (benötigt API-Key, liefert `409` – Movements sind unveränderlich)
+- `DELETE /movements/{movement_id}` (benötigt API-Key, liefert `409` – Movements sind unveränderlich)
 
 ### Inventar und Reports
 
 - `GET /inventory`
 - `GET /reports/inventory-pdf`
+- `GET /export/books` (CSV)
+- `GET /export/movements` (CSV)
+- `GET /export/purchase-orders` (CSV)
 
 ### Lieferanten
 
-- `GET /suppliers`
+- `GET /suppliers?offset=0&limit=50`
 - `GET /suppliers/{supplier_id}`
-- `POST /suppliers`
+- `POST /suppliers` (benötigt API-Key)
 - `GET /suppliers/{supplier_id}/stock`
-- `POST /suppliers/{supplier_id}/order`
+- `POST /suppliers/{supplier_id}/order` (benötigt API-Key)
 
 ### Bestellungen und Wareneingänge
 
-- `GET /purchase-orders`
-- `POST /purchase-orders`
-- `POST /purchase-orders/{order_id}/receive`
-- `GET /incoming-deliveries`
-- `POST /incoming-deliveries/{delivery_id}/book`
+- `GET /purchase-orders?offset=0&limit=50`
+- `POST /purchase-orders` (benötigt API-Key)
+- `POST /purchase-orders/{order_id}/receive` (benötigt API-Key)
+- `GET /incoming-deliveries?offset=0&limit=50`
+- `POST /incoming-deliveries/{delivery_id}/book` (benötigt API-Key)
+
+### Aktivitäts-Log
+
+- `GET /activity-logs?offset=0&limit=50&entity_type=book&entity_id=B001&performed_by=system`
 
 ## Tests
 

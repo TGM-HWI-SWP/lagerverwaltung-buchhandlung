@@ -110,3 +110,17 @@ class BookSupplier(Base):
     last_purchase_price = Column(Numeric(10, 2), nullable=False, default=0)
     created_at = Column(String, nullable=False)
     updated_at = Column(String, nullable=False)
+
+
+class ActivityLog(Base):
+    """Audit log for tracking all create/update/delete operations."""
+    __tablename__ = "activity_logs"
+
+    id = Column(String, primary_key=True)
+    timestamp = Column(String, nullable=False)
+    performed_by = Column(String, nullable=False, default="system")
+    action = Column(String, nullable=False)  # CREATE, UPDATE, DELETE, LOGIN, etc.
+    entity_type = Column(String, nullable=False)  # book, movement, supplier, order, delivery
+    entity_id = Column(String, nullable=False)
+    changes = Column(Text, nullable=True)  # JSON string with before/after values
+    reason = Column(String, nullable=True)
