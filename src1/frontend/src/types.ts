@@ -144,6 +144,7 @@ export type SaleEntry = {
   total: number;
   createdAt: string;
   reason: string;
+  discountAmount?: number;
 };
 
 export type BookApi = Book & {
@@ -157,15 +158,13 @@ export type AppSettings = {
   confirmDelete: boolean;
   autoRefresh: boolean;
   autoRefreshSeconds: number;
-};
-
-export type FullAppSettings = AppSettings & {
-  apiKey: string;
+  loadDemoData: boolean;
 };
 
 export type PageKey =
   | "dashboard"
   | "lager"
+  | "katalog"
   | "bestellen"
   | "wareneingang"
   | "verkauf"
@@ -183,4 +182,93 @@ export type ActivityLog = {
   entity_id: string;
   changes: string | null;
   reason: string | null;
+};
+
+export type StaffUserSummary = {
+  id: string;
+  username: string;
+  display_name: string;
+  role: string;
+  avatar_image: string;
+};
+
+// Commerce v2 types
+export type CatalogProduct = {
+  id: string;
+  sku: string;
+  title: string;
+  author: string;
+  description: string;
+  category: string;
+  is_active: boolean;
+};
+
+export type StockEntry = {
+  product_id: string;
+  sku: string;
+  title: string;
+  author: string;
+  on_hand: number;
+  allocated: number;
+  available: number;
+  reorder_point: number;
+  warehouse_code: string;
+};
+
+export type SaleOrderLine = {
+  product_id: string;
+  sku: string;
+  title: string;
+  quantity: number;
+  unit_price: number;
+  discount_amount: number;
+  tax_rate: number;
+};
+
+export type SaleOrder = {
+  id: string;
+  order_number: string;
+  cashier_user_id: string;
+  customer_name: string;
+  customer_email: string;
+  total_amount: number;
+  total_discount: number;
+  total_tax: number;
+  final_amount: number;
+  status: "draft" | "completed" | "cancelled" | "refunded";
+  lines: SaleOrderLine[];
+  created_at: string;
+  completed_at: string | null;
+};
+
+export type DiscountRule = {
+  id: string;
+  name: string;
+  rule_type: "percentage" | "fixed_amount" | "buy_x_get_y";
+  value_type: "percentage" | "amount";
+  value: number;
+  min_order_amount: number;
+  stackable: boolean;
+  is_active: boolean;
+};
+
+export type PurchaseOrderV2 = {
+  id: string;
+  order_number: string;
+  supplier_id: string;
+  status: "draft" | "ordered" | "partially_received" | "received" | "cancelled";
+  created_at: string;
+  ordered_at: string | null;
+  received_at: string | null;
+};
+
+export type PurchaseOrderLineV2 = {
+  id: string;
+  product_id: string;
+  sku: string;
+  title: string;
+  quantity: number;
+  unit_price: number;
+  received_quantity: number;
+  status: "pending" | "partially_received" | "received";
 };

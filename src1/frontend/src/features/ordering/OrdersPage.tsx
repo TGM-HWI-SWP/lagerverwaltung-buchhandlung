@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import type { Book, NewBookDraft, ReorderDraft, PurchaseOrder, Supplier, IncomingDelivery } from "@/types";
-import { mapDraftToBookPayload, mapPurchaseOrderApiToOrder, mapIncomingDeliveryApi } from "@/lib/mappers";
+import type { Book, NewBookDraft, ReorderDraft, PurchaseOrder, Supplier, IncomingDelivery, BookApi, CatalogProduct } from "@/types";
+import { mapDraftToBookPayload, mapPurchaseOrderApiToOrder, mapIncomingDeliveryApi, mapBookApiToBook } from "@/lib/mappers";
 import { apiGet, apiPost } from "@/api/client";
 
 interface OrdersPageProps {
@@ -58,6 +58,7 @@ export function OrdersPage({
   const tableBorder = dark ? "border-gray-800" : "border-gray-200";
   const tableHeadText = dark ? "text-gray-400" : "text-gray-500";
   const mutedText = dark ? "text-gray-400" : "text-gray-500";
+  const rowPaddingClass = "py-2";
   const formInputClass = dark
     ? "w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-white placeholder:text-gray-400"
     : "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500";
@@ -72,6 +73,55 @@ export function OrdersPage({
     [orders],
   );
 
+  const isMethodNotAllowed = (error: unknown): boolean => {
+    if (!(error instanceof Error)) return false;
+    return error.message.includes("405") || error.message.toLowerCase().includes("method not allowed");
+  };
+
+  const createPurchaseOrderWithFallback = async (payload: {
+    supplier_id: string;
+    book_id: string;
+    book_name: string;
+    book_sku: string;
+    unit_price: number;
+    quantity: number;
+  }): Promise<PurchaseOrder | null> => {
+    try {
+      return await apiPost<PurchaseOrder, typeof payload>("/purchase-orders", payload);
+    } catch (error) {
+      if (!isMethodNotAllowed(error)) throw error;
+      let productId = payload.book_id;
+      const catalog = await apiGet<CatalogProduct[]>("/catalog/products", { include_inactive: true });
+      const existingProduct = catalog.find((entry) => entry.sku === payload.book_sku.trim());
+      if (existingProduct) {
+        productId = existingProduct.id;
+      } else {
+        const createdProduct = await apiPost<CatalogProduct, { sku: string; title: string; author: string; description: string; category: string; selling_price: number; reorder_point: number }>(
+          "/catalog/products",
+          {
+            sku: payload.book_sku.trim(),
+            title: payload.book_name.trim(),
+            author: "",
+            description: "",
+            category: "",
+            selling_price: payload.unit_price,
+            reorder_point: 0,
+          },
+        );
+        productId = createdProduct.id;
+      }
+      await apiPost<unknown, { supplier_id: string; notes: string; lines: Array<{ product_id: string; quantity: number; unit_cost: number }> }>(
+        "/purchase-orders-v2",
+        {
+          supplier_id: payload.supplier_id,
+          notes: "",
+          lines: [{ product_id: productId, quantity: Math.round(payload.quantity), unit_cost: payload.unit_price }],
+        },
+      );
+      return null;
+    }
+  };
+
   useEffect(() => {
     if (!selectedBook) {
       return;
@@ -85,6 +135,7 @@ export function OrdersPage({
 
   const onCreateBook = async () => {
     setBookError(null);
+    setOrderError(null);
     setCreatingBook(true);
     try {
       const initialOrderQuantity = Math.max(0, Number(bookDraft.quantity) || 0);
@@ -93,28 +144,36 @@ export function OrdersPage({
         setBookError("Für eine Erstbestellung braucht das Buch einen Lieferanten.");
         return;
       }
-      const createdBook = await apiPost<Book, Record<string, string | number | null>>(
+      const createdBookApi = await apiPost<BookApi, Record<string, string | number | null>>(
         "/books",
         {
           ...mapDraftToBookPayload(bookDraft),
           quantity: 0,
         },
       );
+      const createdBook = mapBookApiToBook(createdBookApi);
       addBookToState(createdBook);
       if (initialOrderQuantity > 0) {
-        const createdOrder = await apiPost<PurchaseOrder, Record<string, string | number>>(
-          "/purchase-orders",
-          {
+        try {
+          const initialUnitPrice = Number(bookDraft.purchasePrice) > 0 ? Number(bookDraft.purchasePrice) : createdBook.purchasePrice;
+          const createdOrder = await createPurchaseOrderWithFallback({
             supplier_id: createdBook.supplierId || supplierId,
             book_id: createdBook.id,
             book_name: createdBook.name,
             book_sku: createdBook.sku,
-            unit_price: createdBook.purchasePrice,
+            unit_price: initialUnitPrice,
             quantity: initialOrderQuantity,
-          },
-        );
-        setOrders((prev) => [mapPurchaseOrderApiToOrder(createdOrder), ...prev]);
+          });
+          if (createdOrder) {
+            setOrders((prev) => [mapPurchaseOrderApiToOrder(createdOrder), ...prev]);
+          } else {
+            reloadOrders();
+          }
+        } catch (error) {
+          setOrderError(error instanceof Error ? `Buch angelegt, Erstbestellung fehlgeschlagen: ${error.message}` : "Buch angelegt, Erstbestellung fehlgeschlagen.");
+        }
       }
+      setCreateOpen(false);
       setBookDraft({
         name: "",
         author: "",
@@ -127,9 +186,8 @@ export function OrdersPage({
         supplierId: "",
         notes: "",
       });
-      setCreateOpen(false);
-    } catch (err) {
-      setBookError(err instanceof Error ? err.message : "Unbekannter Fehler");
+    } catch (error) {
+      setBookError(error instanceof Error ? error.message : "Fehler beim Erstellen des Buches");
     } finally {
       setCreatingBook(false);
     }
@@ -140,7 +198,7 @@ export function OrdersPage({
     setCreatingOrder(true);
     try {
       if (!selectedBook) {
-        setOrderError("Bitte ein Buch aus dem Lager auswählen.");
+        setOrderError("Bitte ein Buch aus dem Produktkatalog auswählen.");
         return;
       }
       const quantity = Number(draft.quantity);
@@ -161,19 +219,20 @@ export function OrdersPage({
         return;
       }
 
-      const createdOrder = await apiPost<PurchaseOrder, Record<string, string | number>>(
-        "/purchase-orders",
-        {
-          supplier_id: selectedSupplier.id,
-          book_id: selectedBook.id,
-          book_name: selectedBook.name,
-          book_sku: selectedBook.sku,
-          unit_price: unitPrice,
-          quantity: Math.round(quantity),
-        },
-      );
+      const createdOrder = await createPurchaseOrderWithFallback({
+        supplier_id: selectedSupplier.id,
+        book_id: selectedBook.id,
+        book_name: selectedBook.name,
+        book_sku: selectedBook.sku,
+        unit_price: unitPrice,
+        quantity: Math.round(quantity),
+      });
 
-      setOrders((prev) => [mapPurchaseOrderApiToOrder(createdOrder), ...prev]);
+      if (createdOrder) {
+        setOrders((prev) => [mapPurchaseOrderApiToOrder(createdOrder), ...prev]);
+      } else {
+        reloadOrders();
+      }
       setDraft({
         bookId: "",
         supplierId: "",
@@ -261,7 +320,7 @@ export function OrdersPage({
                     }))
                   }
                 >
-                  <option value="">Buch aus Lager auswählen</option>
+                  <option value="">Buch aus Katalog auswählen</option>
                   {books
                     .slice()
                     .sort((a, b) => (a.quantity - b.quantity) || a.name.localeCompare(b.name))

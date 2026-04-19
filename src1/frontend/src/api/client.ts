@@ -45,7 +45,10 @@ function buildUrl(path: string, params: Record<string, unknown> = {}): string {
 
 export async function apiGet<T>(path: string, params: Record<string, unknown> = {}): Promise<T> {
   const url = buildUrl(path, params);
-  const response = await fetch(url);
+  const token = getStoredToken();
+  const headers: HeadersInit = {};
+  if (token) (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
+  const response = await fetch(url, { headers });
   if (!response.ok) {
     throw new Error(await getErrorMessage(response));
   }
