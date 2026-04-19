@@ -1,3 +1,4 @@
+from fastapi import Query
 from sqlalchemy.orm import Session
 
 from app.adapters.sqlalchemy_repositories import SqlAlchemyBookRepository
@@ -10,8 +11,12 @@ def _service(db: Session) -> BooksService:
     return BooksService(SqlAlchemyBookRepository(db))
 
 
-def get_all_books(db: Session) -> list[Book]:
-    return _service(db).list_books()
+def get_all_books(
+    db: Session,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+) -> list[Book]:
+    return _service(db).list_books_paginated(offset=offset, limit=limit)
 
 
 def get_book(db: Session, book_id: str) -> Book | None:

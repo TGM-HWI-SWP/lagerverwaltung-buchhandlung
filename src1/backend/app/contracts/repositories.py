@@ -12,6 +12,8 @@ from app.db.schemas import BookSchema, MovementSchema
 class BookRepository(Protocol):
     def list(self) -> list[Book]: ...
 
+    def list_paginated(self, offset: int = 0, limit: int = 50) -> list[Book]: ...
+
     def get(self, book_id: str) -> Book | None: ...
 
     def create(self, book: BookSchema) -> Book: ...
@@ -20,9 +22,13 @@ class BookRepository(Protocol):
 
     def delete(self, book_id: str) -> bool: ...
 
+    def count(self) -> int: ...
+
 
 class MovementRepository(Protocol):
     def list(self) -> list[Movement]: ...
+
+    def list_paginated(self, offset: int = 0, limit: int = 50) -> list[Movement]: ...
 
     def get(self, movement_id: str) -> Movement | None: ...
 
@@ -32,14 +38,13 @@ class MovementRepository(Protocol):
 
     def delete(self, movement_id: str) -> bool: ...
 
+    def count(self) -> int: ...
+
 
 @dataclass(frozen=True)
 class Repositories:
-    """
-    Simple container to wire repositories together per request.
-    """
+    """Simple container to wire repositories together per request."""
 
     db: Session
     books: BookRepository
     movements: MovementRepository
-

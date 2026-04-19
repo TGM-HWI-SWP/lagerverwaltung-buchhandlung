@@ -17,6 +17,18 @@ class SupplierService:
     def list_suppliers(self) -> list[Supplier]:
         return self._db.query(Supplier).order_by(Supplier.name.asc()).all()
 
+    def list_suppliers_paginated(self, offset: int = 0, limit: int = 50) -> list[Supplier]:
+        return (
+            self._db.query(Supplier)
+            .order_by(Supplier.name.asc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+    def count_suppliers(self) -> int:
+        return self._db.query(Supplier).count()
+
     def get_supplier(self, supplier_id: str) -> Supplier | None:
         return self._db.query(Supplier).filter(Supplier.id == supplier_id).first()
 
@@ -42,6 +54,18 @@ class SupplierService:
 
     def list_purchase_orders(self) -> list[PurchaseOrder]:
         return self._db.query(PurchaseOrder).order_by(PurchaseOrder.created_at.desc()).all()
+
+    def list_purchase_orders_paginated(self, offset: int = 0, limit: int = 50) -> list[PurchaseOrder]:
+        return (
+            self._db.query(PurchaseOrder)
+            .order_by(PurchaseOrder.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+    def count_purchase_orders(self) -> int:
+        return self._db.query(PurchaseOrder).count()
 
     def create_purchase_order(self, order_data: PurchaseOrderSchema) -> PurchaseOrder:
         supplier = self._db.query(Supplier).filter(Supplier.id == order_data.supplier_id).first()
@@ -125,6 +149,20 @@ class SupplierService:
 
     def list_incoming_deliveries(self) -> list[IncomingDelivery]:
         return self._db.query(IncomingDelivery).order_by(IncomingDelivery.received_at.desc()).all()
+
+    def list_incoming_deliveries_paginated(
+        self, offset: int = 0, limit: int = 50
+    ) -> list[IncomingDelivery]:
+        return (
+            self._db.query(IncomingDelivery)
+            .order_by(IncomingDelivery.received_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+    def count_incoming_deliveries(self) -> int:
+        return self._db.query(IncomingDelivery).count()
 
     def book_incoming_delivery(
         self,

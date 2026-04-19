@@ -77,6 +77,18 @@ class SqlAlchemyBookRepository(BookRepository):
     def list(self) -> list[Book]:
         return self._db.query(Book).order_by(Book.name.asc()).all()
 
+    def list_paginated(self, offset: int = 0, limit: int = 50) -> list[Book]:
+        return (
+            self._db.query(Book)
+            .order_by(Book.name.asc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+    def count(self) -> int:
+        return self._db.query(Book).count()
+
     def get(self, book_id: str) -> Book | None:
         return self._db.query(Book).filter(Book.id == book_id).first()
 
@@ -151,6 +163,18 @@ class SqlAlchemyMovementRepository(MovementRepository):
 
     def list(self) -> list[Movement]:
         return self._db.query(Movement).order_by(Movement.timestamp.desc()).all()
+
+    def list_paginated(self, offset: int = 0, limit: int = 50) -> list[Movement]:
+        return (
+            self._db.query(Movement)
+            .order_by(Movement.timestamp.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+    def count(self) -> int:
+        return self._db.query(Movement).count()
 
     def get(self, movement_id: str) -> Movement | None:
         return self._db.query(Movement).filter(Movement.id == movement_id).first()

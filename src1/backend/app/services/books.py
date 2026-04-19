@@ -12,6 +12,12 @@ class BooksService:
     def list_books(self) -> list[Book]:
         return self._books.list()
 
+    def list_books_paginated(self, offset: int = 0, limit: int = 50) -> list[Book]:
+        return self._books.list_paginated(offset=offset, limit=limit)
+
+    def count_books(self) -> int:
+        return self._books.count()
+
     def get_book(self, book_id: str) -> Book | None:
         return self._books.get(book_id)
 
@@ -23,4 +29,3 @@ class BooksService:
 
     def delete_book(self, book_id: str) -> bool:
         return self._books.delete(book_id)
-

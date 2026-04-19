@@ -1,3 +1,4 @@
+from fastapi import Query
 from sqlalchemy.orm import Session
 
 from app.adapters.sqlalchemy_repositories import SqlAlchemyBookRepository, SqlAlchemyMovementRepository
@@ -14,8 +15,12 @@ def _service(db: Session) -> InventoryService:
     )
 
 
-def get_all_movements(db: Session) -> list[Movement]:
-    return _service(db).list_movements()
+def get_all_movements(
+    db: Session,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+) -> list[Movement]:
+    return _service(db).list_movements_paginated(offset=offset, limit=limit)
 
 
 def get_movement(db: Session, movement_id: str) -> Movement | None:

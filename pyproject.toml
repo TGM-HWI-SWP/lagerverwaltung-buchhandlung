@@ -3,16 +3,18 @@ requires = ["setuptools>=65.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "projekt-verwaltung"
-version = "0.1.0"
-description = "Verwaltungssoftware für Lagerverwaltung/Produktmanagement"
+name = "buchhandlungsverwaltung-backend"
+version = "0.2.0"
+description = "Backend API for bookstore inventory management (FastAPI + SQLAlchemy)"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "PyQt6>=6.6.0",
-    "tinydb>=4.8.0",
-    "pytest>=7.4.0",
-    "pytest-cov>=4.1.0",
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "sqlalchemy>=2.0.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "matplotlib>=3.7.0",
 ]
 
 [project.optional-dependencies]
@@ -22,14 +24,16 @@ dev = [
     "black>=23.9.0",
     "flake8>=6.1.0",
     "mypy>=1.5.0",
+    "httpx>=0.25.0",
 ]
 
 [tool.setuptools]
-packages = ["src", "tests"]
+packages = ["src1/backend/app"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["src1/backend/tests"]
 python_files = "test_*.py"
+asyncio_mode = "auto"
 
 [tool.black]
 line-length = 100
