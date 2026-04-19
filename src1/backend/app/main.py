@@ -546,6 +546,7 @@ def order_from_supplier(
     user=Depends(require_user),
 ):
     try:
+        order = order.model_copy(update={"performed_by": user.username})
         return suppliers.order_from_supplier(
             db,
             supplier_id=supplier_id,
