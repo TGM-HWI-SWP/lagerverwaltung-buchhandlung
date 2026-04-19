@@ -3,11 +3,19 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
-function getStoredApiKey(): string | null {
+const AUTH_TOKEN_STORAGE = "buchmanagement.authToken";
+
+function getStoredToken(): string | null {
   if (typeof window !== "undefined") {
-    return localStorage.getItem("buchmanagement.apiKey") || null;
+    return localStorage.getItem(AUTH_TOKEN_STORAGE) || null;
   }
   return null;
+}
+
+export function setAuthToken(token: string | null) {
+  if (typeof window === "undefined") return;
+  if (!token) localStorage.removeItem(AUTH_TOKEN_STORAGE);
+  else localStorage.setItem(AUTH_TOKEN_STORAGE, token);
 }
 
 async function getErrorMessage(response: Response): Promise<string> {
@@ -49,11 +57,9 @@ async function sendJson<TResponse, TBody>(
   path: string,
   body: TBody,
 ): Promise<TResponse> {
-  const apiKey = getStoredApiKey();
+  const token = getStoredToken();
   const headers: HeadersInit = { "Content-Type": "application/json" };
-  if (apiKey) {
-    (headers as Record<string, string>)["X-API-Key"] = apiKey;
-  }
+  if (token) (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
     headers,
@@ -74,14 +80,11 @@ export function apiPut<TResponse, TBody>(path: string, body: TBody): Promise<TRe
 }
 
 export async function apiDelete(path: string): Promise<void> {
-  const apiKey = getStoredApiKey();
+  const token = getStoredToken();
   const headers: HeadersInit = {};
-  if (apiKey) {
-    (headers as Record<string, string>)["X-API-Key"] = apiKey;
-  }
+  if (token) (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
   const response = await fetch(`${API_BASE_URL}${path}`, { method: "DELETE", headers });
   if (!response.ok) {
     throw new Error(await getErrorMessage(response));
   }
 }
-

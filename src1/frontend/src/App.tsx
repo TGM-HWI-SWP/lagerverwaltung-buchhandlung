@@ -31,6 +31,9 @@ import type {
   SaleEntry,
   MovementApi,
   ActivityLog,
+  BookApi,
+  PurchaseOrderApi,
+  IncomingDeliveryApi,
 } from "@/types";
 
 import {
@@ -50,6 +53,7 @@ import { SuppliersPage } from "@/features/suppliers/SuppliersPage";
 import { ReportsPage } from "@/features/reports/ReportsPage";
 import { SettingsPage } from "@/features/settings/SettingsPage";
 import { ActivityLogPage } from "@/features/activity/ActivityLogPage";
+import { LoginPage } from "@/features/auth/LoginPage";
 
 type PageKey =
   | "dashboard"
@@ -117,8 +121,13 @@ export default function Dashboard() {
   const [incomingDeliveries, setIncomingDeliveries] = useState<IncomingDelivery[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [me, setMe] = useState<{ username: string; displayName: string; role: string } | null>(null);
 
   const toggleTheme = () => setDark((prev) => !prev);
+
+  if (!me) {
+    return <LoginPage dark={dark} onLoggedIn={setMe} />;
+  }
 
   const reloadSuppliers = async () => {
     try {
