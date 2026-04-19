@@ -1,4 +1,5 @@
 from sqlalchemy import Boolean, CheckConstraint, Column, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy.types import DateTime
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -22,8 +23,8 @@ class Book(Base):
     sku = Column(String, default="")
     category = Column(String, default="")
     supplier_id = Column(String, ForeignKey("suppliers.id"), default="")
-    created_at = Column(String, nullable=False)
-    updated_at = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False)
+    updated_at = Column(DateTime, nullable=False)
     notes = Column(Text, nullable=True)
 
 
@@ -39,7 +40,7 @@ class Movement(Base):
     quantity_change = Column(Integer, nullable=False)
     movement_type = Column(String, nullable=False)  # IN, OUT, CORRECTION
     reason = Column(Text, nullable=True)
-    timestamp = Column(String, nullable=False)
+    timestamp = Column(DateTime, nullable=False)
     performed_by = Column(String, nullable=False, default="system")
 
 
@@ -51,7 +52,7 @@ class Supplier(Base):
     contact = Column(String, default="")                    # E-Mail / Telefon
     address = Column(String, default="")                    # Anschrift
     notes = Column(Text, nullable=True)                     # Bemerkungen
-    created_at = Column(String, nullable=False)             # Anlegedatum
+    created_at = Column(DateTime, nullable=False)             # Anlegedatum
 
 
 class PurchaseOrder(Base):
@@ -73,8 +74,8 @@ class PurchaseOrder(Base):
     quantity = Column(Integer, nullable=False)
     delivered_quantity = Column(Integer, nullable=False, default=0)
     status = Column(String, nullable=False, default="offen")
-    created_at = Column(String, nullable=False)
-    delivered_at = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False)
+    delivered_at = Column(DateTime, nullable=True)
 
 
 class IncomingDelivery(Base):
@@ -92,7 +93,7 @@ class IncomingDelivery(Base):
     book_name = Column(String, nullable=False)
     quantity = Column(Integer, nullable=False)
     unit_price = Column(Numeric(10, 2), nullable=False, default=0)
-    received_at = Column(String, nullable=False)
+    received_at = Column(DateTime, nullable=False)
 
 
 class BookSupplier(Base):
@@ -108,8 +109,8 @@ class BookSupplier(Base):
     supplier_sku = Column(String, nullable=False, default="")
     is_primary = Column(Boolean, nullable=False, default=False)
     last_purchase_price = Column(Numeric(10, 2), nullable=False, default=0)
-    created_at = Column(String, nullable=False)
-    updated_at = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False)
+    updated_at = Column(DateTime, nullable=False)
 
 
 class ActivityLog(Base):
@@ -117,7 +118,7 @@ class ActivityLog(Base):
     __tablename__ = "activity_logs"
 
     id = Column(String, primary_key=True)
-    timestamp = Column(String, nullable=False)
+    timestamp = Column(DateTime, nullable=False)
     performed_by = Column(String, nullable=False, default="system")
     action = Column(String, nullable=False)  # CREATE, UPDATE, DELETE, LOGIN, etc.
     entity_type = Column(String, nullable=False)  # book, movement, supplier, order, delivery

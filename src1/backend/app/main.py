@@ -101,6 +101,39 @@ def _ensure_sqlite_schema():
                 )
             )
 
+        # ---- DateTime migration (SQLite-safe)
+        # SQLite can't ALTER COLUMN reliably. We add *_dt columns and backfill from existing
+        # ISO timestamps stored as TEXT.
+        def _add_dt_column(table: str, old_col: str, new_col: str) -> None:
+            cols = {c["name"] for c in inspector.get_columns(table)}
+            if new_col in cols:
+                return
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {new_col} DATETIME"))
+            conn.execute(
+                text(
+                    f"UPDATE {table} SET {new_col} = {old_col} "
+                    f"WHERE {new_col} IS NULL AND {old_col} IS NOT NULL"
+                )
+            )
+
+        if "books" in table_names:
+            _add_dt_column("books", "created_at", "created_at_dt")
+            _add_dt_column("books", "updated_at", "updated_at_dt")
+        if "movements" in table_names:
+            _add_dt_column("movements", "timestamp", "timestamp_dt")
+        if "suppliers" in table_names:
+            _add_dt_column("suppliers", "created_at", "created_at_dt")
+        if "purchase_orders" in table_names:
+            _add_dt_column("purchase_orders", "created_at", "created_at_dt")
+            _add_dt_column("purchase_orders", "delivered_at", "delivered_at_dt")
+        if "incoming_deliveries" in table_names:
+            _add_dt_column("incoming_deliveries", "received_at", "received_at_dt")
+        if "book_suppliers" in table_names:
+            _add_dt_column("book_suppliers", "created_at", "created_at_dt")
+            _add_dt_column("book_suppliers", "updated_at", "updated_at_dt")
+        if "activity_logs" in table_names:
+            _add_dt_column("activity_logs", "timestamp", "timestamp_dt")
+
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_books_supplier_id ON books (supplier_id)"))
         conn.execute(
             text("CREATE UNIQUE INDEX IF NOT EXISTS ix_books_sku_non_empty ON books (sku) WHERE sku <> ''")
