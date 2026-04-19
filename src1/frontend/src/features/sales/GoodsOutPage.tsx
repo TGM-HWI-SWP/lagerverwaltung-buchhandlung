@@ -33,6 +33,9 @@ export function GoodsOutPage({ card, dark, books, reloadBooks, salesLog, reloadM
     ? "w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white"
     : "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900";
 
+  const mutedText = dark ? "text-gray-400" : "text-gray-500";
+  const tableHeadText = dark ? "text-gray-400" : "text-gray-500";
+
   const recordSale = async () => {
     if (!selectedBook) return;
     const qty = Number(quantity);
