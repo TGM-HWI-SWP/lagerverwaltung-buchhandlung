@@ -171,7 +171,13 @@ Persönliches Changelog für Kattner, Rolle: Backend/Integration (FastAPI ↔ Re
 
 ### Commits
 ```
-- (noch nicht committed in dieser Runde)
+- cae1d3c docs: update README, known issues, and changelog
+- 2e3118a backend: stabilize API errors, pagination, and immutability
+- 562d929 frontend: split features and add error boundary
+- c86f89d frontend: fix build and apply audit updates
+- 7495a2d docs: clarify setup and add datetime migration plan
+- e292840 backend: add datetime columns and migrate on startup
+- 2b8f857 docs: drop datetime migration plan after implementation
 ```
 
 ### Mergekonflikt(e)
