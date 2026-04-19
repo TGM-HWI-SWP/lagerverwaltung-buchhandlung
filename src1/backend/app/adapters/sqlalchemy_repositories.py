@@ -8,6 +8,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.contracts.repositories import BookRepository, MovementRepository
+from datetime import datetime
+
 from app.core.time import utc_now_iso
 from app.db.models import Book, BookSupplier, Movement
 from app.db.schemas import BookSchema, MovementSchema
@@ -38,7 +40,7 @@ def sync_book_supplier_link(
     if not supplier_id:
         return
 
-    now = utc_now_iso()
+    now = datetime.fromisoformat(utc_now_iso())
     link = (
         db.query(BookSupplier)
         .filter(BookSupplier.book_id == book_id, BookSupplier.supplier_id == supplier_id)
@@ -95,9 +97,10 @@ class SqlAlchemyBookRepository(BookRepository):
     def create(self, book: BookSchema) -> Book:
         payload = book.model_dump()
         now = utc_now_iso()
+        now_dt = datetime.fromisoformat(now)
         payload["id"] = payload.get("id") or str(uuid4())
-        payload["created_at"] = payload.get("created_at") or now
-        payload["updated_at"] = payload.get("updated_at") or now
+        payload["created_at"] = datetime.fromisoformat(payload.get("created_at") or now)
+        payload["updated_at"] = datetime.fromisoformat(payload.get("updated_at") or now)
 
         db_book = Book(**payload)
         self._db.add(db_book)
@@ -125,7 +128,7 @@ class SqlAlchemyBookRepository(BookRepository):
             if value is not None:
                 setattr(db_book, key, value)
 
-        db_book.updated_at = utc_now_iso()
+        db_book.updated_at = datetime.fromisoformat(utc_now_iso())
         sync_book_supplier_link(
             self._db,
             book_id=db_book.id,

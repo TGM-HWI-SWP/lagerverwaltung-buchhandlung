@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
@@ -45,7 +46,7 @@ class SupplierService:
             contact=supplier_data.contact,
             address=supplier_data.address,
             notes=supplier_data.notes,
-            created_at=supplier_data.created_at or utc_now_iso(),
+            created_at=datetime.fromisoformat(supplier_data.created_at or utc_now_iso()),
         )
         self._db.add(supplier)
         self._db.commit()
@@ -76,19 +77,14 @@ class SupplierService:
         if book is None:
             raise ValueError("Buch nicht gefunden")
 
-        existing_link = (
-            self._db.query(BookSupplier)
-            .filter(BookSupplier.book_id == book.id, BookSupplier.supplier_id == supplier.id)
-            .first()
+        # Ensure link exists and update last_purchase_price to the new order price.
+        sync_book_supplier_link(
+            self._db,
+            book_id=book.id,
+            supplier_id=supplier.id,
+            purchase_price=order_data.unit_price,
+            supplier_sku=book.sku or "",
         )
-        if existing_link is None:
-            sync_book_supplier_link(
-                self._db,
-                book_id=book.id,
-                supplier_id=supplier.id,
-                purchase_price=book.purchase_price,
-                supplier_sku=book.sku or "",
-            )
 
         status = order_data.status
         if order_data.delivered_quantity == order_data.quantity:
@@ -107,8 +103,12 @@ class SupplierService:
             quantity=order_data.quantity,
             delivered_quantity=order_data.delivered_quantity,
             status=status,
-            created_at=order_data.created_at or utc_now_iso(),
-            delivered_at=order_data.delivered_at,
+            created_at=datetime.fromisoformat(order_data.created_at or utc_now_iso()),
+            delivered_at=(
+                datetime.fromisoformat(order_data.delivered_at)
+                if order_data.delivered_at
+                else None
+            ),
         )
         self._db.add(order)
         self._db.commit()
@@ -124,7 +124,7 @@ class SupplierService:
         if quantity > remaining_quantity:
             raise ValueError("Liefermenge ist größer als die offene Restmenge")
 
-        now = utc_now_iso()
+        now = datetime.fromisoformat(utc_now_iso())
         delivery = IncomingDelivery(
             id=f"IN-{uuid4().hex[:12].upper()}",
             order_id=order.id,
@@ -181,7 +181,7 @@ class SupplierService:
         if book is None:
             raise ValueError("Buch nicht gefunden")
 
-        now = utc_now_iso()
+        now = datetime.fromisoformat(utc_now_iso())
         book.quantity = int(book.quantity) + int(delivery.quantity)
         book.purchase_price = float(delivery.unit_price)
         book.supplier_id = delivery.supplier_id
@@ -249,7 +249,7 @@ class SupplierService:
         if link is None:
             raise ValueError("Buch ist bei diesem Lieferanten nicht gelistet")
 
-        now = utc_now_iso()
+        now = datetime.fromisoformat(utc_now_iso())
         book.quantity = int(book.quantity) + order_data.quantity
         book.updated_at = now
         book.supplier_id = supplier_id

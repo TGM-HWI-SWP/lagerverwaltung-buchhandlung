@@ -16,12 +16,13 @@ import matplotlib.pyplot as plt                                                 
 from matplotlib.backends.backend_pdf import PdfPages                            # PDF-Export
 
 from app.core.config import settings                                            # App-Konfiguration
-from app.core.auth import verify_api_key                                        # Authentication
+# API-key auth was replaced by staff login tokens.
 # ConflictError is handled by a global exception handler
 from app.core.errors import install_error_handlers
 from app.core.migrations import ensure_schema
 from app.db.models import Base                                                  # DB-Modelle
 from app.db.models import Book
+from app.db.models_auth import StaffUser
 from app.db.session import engine, get_db                                       # DB-Verbindung
 from app.db.schemas import (                                                    # Pydantic-Schemas
     BookSchema,
@@ -34,7 +35,9 @@ from app.db.schemas import (                                                    
     IncomingDeliverySchema,
     BookIncomingDeliveryRequest,
 )
-from app.api import books, inventory, suppliers, activity                             # CRUD-Logik + activity
+from app.api import books, inventory, suppliers, activity, auth as auth_api          # CRUD-Logik + activity
+from app.core.auth_staff import require_admin, require_user
+from app.db.schemas_auth import LoginRequest, LoginResponse, WhoAmIResponse
 
 
 def _clamp_pagination(offset: int, limit: int, *, max_limit: int = 100) -> tuple[int, int]:
@@ -61,6 +64,23 @@ def _ensure_sqlite_schema():
             conn.execute(text("ALTER TABLE books ADD COLUMN author VARCHAR DEFAULT '' NOT NULL"))
 
         table_names = set(inspector.get_table_names())
+
+        if "staff_users" not in table_names:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE staff_users (
+                        id VARCHAR PRIMARY KEY,
+                        username VARCHAR NOT NULL UNIQUE,
+                        display_name VARCHAR NOT NULL,
+                        role VARCHAR NOT NULL DEFAULT 'cashier',
+                        pin_hash VARCHAR NOT NULL,
+                        is_active BOOLEAN NOT NULL DEFAULT 1,
+                        CONSTRAINT ck_staff_users_pin_hash_non_empty CHECK (pin_hash <> '')
+                    )
+                    """
+                )
+            )
         if "book_suppliers" not in table_names:
             conn.execute(
                 text(
@@ -227,6 +247,34 @@ def _ensure_default_supplier_data():
                 },
             )
 
+
+def _ensure_default_staff_user():
+    """Create a default admin user for first-time setup."""
+    from hashlib import sha256
+
+    with engine.begin() as conn:
+        exists = conn.execute(text("SELECT COUNT(*) FROM staff_users")).scalar()
+        if exists and int(exists) > 0:
+            return
+
+        # Default: admin/admin PIN 1234 (change immediately in Settings UI)
+        pin_hash = sha256("1234".encode("utf-8")).hexdigest()
+        conn.execute(
+            text(
+                """
+                INSERT INTO staff_users (id, username, display_name, role, pin_hash, is_active)
+                VALUES (:id, :username, :display_name, :role, :pin_hash, 1)
+                """
+            ),
+            {
+                "id": "U001",
+                "username": "admin",
+                "display_name": "Admin",
+                "role": "admin",
+                "pin_hash": pin_hash,
+            },
+        )
+
 def _seed_database():
     """Fügt Testdaten ein, wenn die Datenbank leer ist."""
     sql_file = Path(__file__).parent / "db" / "buchhandlung.sql"
@@ -247,6 +295,7 @@ def _seed_database():
 _ensure_sqlite_schema()
 _seed_database()
 _ensure_default_supplier_data()
+_ensure_default_staff_user()
 
 # Explicit migration hook (currently no-op; keeps a clean seam for future extraction)
 ensure_schema()
@@ -283,6 +332,16 @@ def health():
     return {"status": "ok", "app": settings.app_name}
 
 
+@app.post("/auth/login", response_model=LoginResponse)
+def auth_login(payload: LoginRequest, db: Session = Depends(get_db)):
+    return auth_api.login(db, payload)
+
+
+@app.get("/auth/me", response_model=WhoAmIResponse)
+def auth_me(user=Depends(require_user)):
+    return auth_api.whoami(user)
+
+
 # ── Books ──────────────────────────────────────────────
 
 
@@ -308,7 +367,7 @@ def read_book(book_id: str, db: Session = Depends(get_db)):
 def create_book(
     book: BookSchema,
     db: Session = Depends(get_db),
-    api_key: str = Depends(verify_api_key),
+    user=Depends(require_admin),
 ):
     try:
         return books.create_book(db, book)
@@ -321,7 +380,7 @@ def update_book(
     book_id: str,
     book: BookSchema,
     db: Session = Depends(get_db),
-    api_key: str = Depends(verify_api_key),
+    user=Depends(require_admin),
 ):
     try:
         updated = books.update_book(db, book_id, book)
@@ -336,7 +395,7 @@ def update_book(
 def delete_book(
     book_id: str,
     db: Session = Depends(get_db),
-    api_key: str = Depends(verify_api_key),
+    user=Depends(require_admin),
 ):
     try:
         if not books.delete_book(db, book_id):
@@ -371,9 +430,11 @@ def read_movement(movement_id: str, db: Session = Depends(get_db)):
 def create_movement(
     movement: MovementSchema,
     db: Session = Depends(get_db),
-    api_key: str = Depends(verify_api_key),
+    user=Depends(require_user),
 ):
     try:
+        # Ensure movements are attributed to the logged-in staff user.
+        movement = movement.model_copy(update={"performed_by": user.username})
         return inventory.create_movement(db, movement)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -383,7 +444,7 @@ def create_movement(
 def update_movement(
     movement_id: str,
     movement: MovementSchema,
-    api_key: str = Depends(verify_api_key),
+    user=Depends(require_admin),
 ):
     raise HTTPException(
         status_code=409,
@@ -394,7 +455,7 @@ def update_movement(
 @app.delete("/movements/{movement_id}", status_code=409)  # Bewegung löschen
 def delete_movement(
     movement_id: str,
-    api_key: str = Depends(verify_api_key),
+    user=Depends(require_admin),
 ):
     raise HTTPException(
         status_code=409,
@@ -482,7 +543,7 @@ def order_from_supplier(
     supplier_id: str,
     order: SupplierOrderRequest,
     db: Session = Depends(get_db),
-    api_key: str = Depends(verify_api_key),
+    user=Depends(require_user),
 ):
     try:
         return suppliers.order_from_supplier(
@@ -500,7 +561,7 @@ def order_from_supplier(
 def create_supplier(
     supplier: SupplierSchema,
     db: Session = Depends(get_db),
-    api_key: str = Depends(verify_api_key),
+    user=Depends(require_admin),
 ):
     return suppliers.create_supplier(db, supplier)
 

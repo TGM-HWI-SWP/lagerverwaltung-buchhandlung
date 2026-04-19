@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
@@ -59,14 +60,14 @@ class InventoryService:
         payload["id"] = movement.id or next_movement_id(self._db)
         payload["movement_type"] = movement_type
         payload["quantity_change"] = quantity_delta
-        payload["timestamp"] = movement.timestamp or utc_now_iso()
+        payload["timestamp"] = datetime.fromisoformat(movement.timestamp or utc_now_iso())
         payload["book_name"] = movement.book_name or book.name
         payload["reason"] = reason
 
         db_movement = Movement(**payload)
 
         book.quantity = next_quantity
-        book.updated_at = utc_now_iso()
+        book.updated_at = datetime.fromisoformat(utc_now_iso())
 
         # Ensure atomicity for "movement + book quantity change"
         self._db.add(db_movement)
