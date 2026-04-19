@@ -3,6 +3,13 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
+function getStoredApiKey(): string | null {
+  if (typeof window !== "undefined") {
+    return localStorage.getItem("buchmanagement.apiKey") || null;
+  }
+  return null;
+}
+
 async function getErrorMessage(response: Response): Promise<string> {
   try {
     const data = (await response.json()) as { detail?: string };
@@ -18,8 +25,19 @@ async function getErrorMessage(response: Response): Promise<string> {
     : `API-Fehler: ${response.status}`;
 }
 
-export async function apiGet<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`);
+function buildUrl(path: string, params: Record<string, unknown> = {}): string {
+  const url = new URL(API_BASE_URL + path);
+  Object.keys(params).forEach((key) => {
+    if (params[key] !== undefined && params[key] !== null) {
+      url.searchParams.append(key, String(params[key]));
+    }
+  });
+  return url.toString();
+}
+
+export async function apiGet<T>(path: string, params: Record<string, unknown> = {}): Promise<T> {
+  const url = buildUrl(path, params);
+  const response = await fetch(url);
   if (!response.ok) {
     throw new Error(await getErrorMessage(response));
   }
@@ -31,9 +49,14 @@ async function sendJson<TResponse, TBody>(
   path: string,
   body: TBody,
 ): Promise<TResponse> {
+  const apiKey = getStoredApiKey();
+  const headers: HeadersInit = { "Content-Type": "application/json" };
+  if (apiKey) {
+    (headers as Record<string, string>)["X-API-Key"] = apiKey;
+  }
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(body),
   });
   if (!response.ok) {
@@ -51,8 +74,14 @@ export function apiPut<TResponse, TBody>(path: string, body: TBody): Promise<TRe
 }
 
 export async function apiDelete(path: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}${path}`, { method: "DELETE" });
+  const apiKey = getStoredApiKey();
+  const headers: HeadersInit = {};
+  if (apiKey) {
+    (headers as Record<string, string>)["X-API-Key"] = apiKey;
+  }
+  const response = await fetch(`${API_BASE_URL}${path}`, { method: "DELETE", headers });
   if (!response.ok) {
     throw new Error(await getErrorMessage(response));
   }
 }
+
