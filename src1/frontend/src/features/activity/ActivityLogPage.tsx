@@ -53,7 +53,36 @@ export function ActivityLogPage({ card, dark }: ActivityLogPageProps) {
 
           {!loading && !error && (
             <>
-              <div className="mt-4 overflow-x-auto">
+              <div className="mt-4 space-y-3 md:hidden">
+                {logs.length === 0 ? (
+                  <div className={`rounded-2xl border border-dashed p-4 text-sm ${mutedText}`}>Keine Aktivitäts-Logs vorhanden.</div>
+                ) : (
+                  logs.map((log) => (
+                    <div key={log.id} className={`rounded-2xl border p-4 ${dark ? "border-gray-800 bg-gray-950/60" : "border-gray-200 bg-gray-50"}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="font-semibold">{log.action}</div>
+                          <div className={`mt-1 text-xs ${mutedText}`}>{new Date(log.timestamp).toLocaleString("de-DE")}</div>
+                        </div>
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${dark ? "bg-gray-800 text-gray-200" : "bg-white text-gray-700"}`}>{log.entity_type}</span>
+                      </div>
+                      <div className={`mt-3 space-y-1 text-sm ${dark ? "text-gray-300" : "text-gray-700"}`}>
+                        <div>Benutzer: {log.performed_by}</div>
+                        <div>ID: <span className="font-mono text-xs">{log.entity_id}</span></div>
+                        <div>Grund: {log.reason || "-"}</div>
+                      </div>
+                      {log.changes && (
+                        <details className="mt-3 text-sm">
+                          <summary className="cursor-pointer text-blue-500">Details</summary>
+                          <pre className="mt-2 overflow-auto rounded-xl p-3 text-xs whitespace-pre-wrap">{log.changes}</pre>
+                        </details>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="mt-4 hidden overflow-x-auto md:block">
                 <table className="min-w-full text-left text-sm">
                   <thead>
                     <tr className={`border-b ${dark ? "border-gray-800" : "border-gray-200"} text-xs uppercase ${mutedText}`}>
