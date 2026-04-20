@@ -24,6 +24,7 @@ Wichtige produktive Bereiche:
 - `app/main.py`: öffentliche API
 - `app/services/commerce.py`: Katalog, Lager, Einkauf, Verkauf, Retouren
 - `app/core/bootstrap.py`: Start, Schema-Erzeugung, SQLite-Seed
+- `app/core/location_search.py`: OSM-/Nominatim-Suche mit normalisiertem Antwortformat
 - `app/db/models.py`: Supplier und Activity-Log
 - `app/db/models_commerce.py`: Produktiver Katalog-/Stock-/Sales-Stack
 - `app/db/models_auth.py`: Mitarbeiter und Rollen
@@ -44,6 +45,7 @@ Ein Produkt enthält nur Stammdaten und Aktiv-Status. Verkaufspreise liegen sepa
 - `stock_items`
 
 Aktueller Bestand liegt ausschließlich in `stock_items` pro Lagerort.
+Lagerorte und Lieferanten tragen zusätzlich strukturierte Standortfelder inklusive Stadt, Land und optionalen Koordinaten.
 
 ### Historie
 
@@ -61,6 +63,12 @@ Jede Bestandsänderung wird im Ledger als eigener Eintrag gespeichert.
 - `sales_order_lines`
 - `return_orders`
 - `return_order_lines`
+
+## Standortsuche
+
+- `GET /locations/search` nutzt eine OSM-basierte Nominatim-Suche
+- Treffer werden im Backend normalisiert, damit das Frontend keine externe API-Struktur kennen muss
+- wenn die Suche scheitert, bleibt manuelle Pflege der Standortfelder möglich
 
 ## Frontend
 

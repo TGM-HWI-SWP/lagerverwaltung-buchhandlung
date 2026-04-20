@@ -29,7 +29,6 @@ export function LoginPage({
 }) {
   const [screen, setScreen] = useState<Screen>("landing");
   const [cashiers, setCashiers] = useState<StaffUserSummary[]>([]);
-  const [admins, setAdmins] = useState<StaffUserSummary[]>([]);
   const [selectedUser, setSelectedUser] = useState<StaffUserSummary | null>(null);
   const [adminUsername, setAdminUsername] = useState("");
   const [pin, setPin] = useState("");

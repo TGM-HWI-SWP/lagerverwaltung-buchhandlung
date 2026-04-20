@@ -37,6 +37,7 @@ Wichtig:
 - aktueller Bestand kommt nur aus `stock_items`
 - Historie kommt nur aus `stock_ledger_entries`
 - `stock_adjustments` akzeptiert positive und negative `quantity_delta`
+- `warehouses` enthalten strukturierte Standortfelder wie `location_city`, `location_country`, `location_lat` und `location_lon`
 
 ### Lieferanten
 
@@ -46,6 +47,14 @@ Wichtig:
 - `PUT /product-suppliers/{product_id}`
 
 `product_suppliers` bildet die N:M-Beziehung zwischen Produkt und Lieferant.
+`suppliers` enthalten zusätzlich strukturierte Standortfelder sowie eine kombinierte `address`-Anzeige.
+
+### Standortsuche
+
+- `GET /locations/search?q=...`
+
+Der Endpunkt liefert normalisierte Standortvorschläge aus einer OSM-/Nominatim-Suche.
+Er dient nur als Hilfsfunktion für Formulare; manuelle Eingabe bleibt zulässig.
 
 ### Einkauf
 

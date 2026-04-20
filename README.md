@@ -30,6 +30,8 @@ Damit wird Bestand nicht mehr im Produktstamm gespeichert.
 - Wareneingänge direkt in einen Lagerort einbuchen
 - Verkäufe und Retouren buchen
 - Rollenbasiertes Login für Kasse und Admin
+- strukturierte Standorte für Lieferanten und Lagerorte pflegen
+- OSM-basiertes Standort-Autocomplete mit manueller Fallback-Eingabe
 - PDF- und CSV-Exporte
 
 ## Stack
@@ -90,6 +92,7 @@ npm run dev
 - `GET /sales-orders`
 - `POST /sales-orders`
 - `POST /sales-orders/{order_id}/returns`
+- `GET /locations/search`
 - `GET /reports/stock-pdf`
 - `GET /export/catalog-products`
 - `GET /export/stock-ledger`
@@ -99,7 +102,7 @@ npm run dev
 
 - Bootstrap eines ersten Admins über `POST /auth/bootstrap-admin`; frische Seed-Daten enthalten bewusst keine Demo-Logins
 - Kassierer melden sich per PIN an
-- Admins melden sich per Passwort an
+- Admins melden sich per Benutzername und Passwort an
 - Die Kassenliste enthält bewusst nur Benutzer mit Rolle `cashier`
 
 ## Tests

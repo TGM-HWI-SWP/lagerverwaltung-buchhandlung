@@ -20,9 +20,16 @@ Es sind keine akuten Blocker dokumentiert. Der neue Katalog-/Stock-/Ledger-Stack
 ### 3. Testabdeckung ist noch schmal
 
 - der SQLite-Schematest deckt nur die Datenbasis ab
+- ein kleiner Unit-Test für die Standortsuche ist vorhanden
 - End-to-End- und API-Tests für Einkauf, Wareneingang, Verkauf und Retouren fehlen noch
 
-### 4. Historische Repo-Dateien existieren weiterhin
+### 4. Standortsuche hängt von externer Erreichbarkeit ab
+
+- das Autocomplete nutzt Nominatim auf OpenStreetMap-Basis
+- bei Timeouts oder Ausfällen gibt es bewusst nur leere Vorschläge statt blockierender Fehler
+- die Formulare bleiben deshalb manuell benutzbar
+
+### 5. Historische Repo-Dateien existieren weiterhin
 
 - im Root und in einigen Doku-Dateien liegen noch Projekt- und Lernartefakte
 - sie gehören nicht zum produktiven Kern unter `src1/`

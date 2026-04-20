@@ -214,6 +214,7 @@ eab8d48 Refresh docs and repository defaults for submission
 ```text
 8221e57 Refactor database bootstrap to catalog stock and ledger model
 5692a5d Migrate frontend to catalog warehouse stock and purchase order flows
+f76a974 Polish docs tests and cleanup after catalog stock migration
 ```
 
 ### Bedeutung für die Abgabe
@@ -224,11 +225,41 @@ eab8d48 Refresh docs and repository defaults for submission
 
 ---
 
+## [v0.9] - 2026-04-20
+
+### Implementiert
+
+- Bootstrap- und Login-Flow gehärtet und Seed-Demo-Logins entfernt
+- strukturierte Standorte für Lieferanten und Lagerorte eingeführt
+- OSM-basiertes Standort-Autocomplete mit manuellem Fallback ergänzt
+- Settings-Fluss und Dokumentation nach dem Standort-Rollout bereinigt
+
+### Tests geschrieben
+
+- SQLite-Schematest um Standortspalten erweitert
+- separater Unit-Test für die Nominatim-Normalisierung ergänzt
+
+### Commits
+
+```text
+ff105c5 Harden bootstrap auth and remove seeded demo logins
+df33488 Add structured locations to suppliers and warehouses
+8450df4 Add OpenStreetMap location autocomplete with manual fallback
+```
+
+### Bedeutung für die Abgabe
+
+- Login und Erstsetup sind jetzt glaubwürdiger und ohne Fake-Zugänge
+- Lieferanten und Lagerorte sind fachlich besser modelliert
+- echte Ortsvorschläge erleichtern die Eingabe, ohne das Produkt von externer Verfügbarkeit abhängig zu machen
+
+---
+
 ## Zusammenfassung
 
-**Gesamt implementierte Schwerpunkte:** getrenntes Katalog-/Stock-/Ledger-Modell, Multi-Warehouse-Bestand, SQLite/PostgreSQL-Setup, rollenbasierte Authentifizierung, mehrzeilige Einkaufsbestellungen, Wareneingang je Lagerort, Verkauf und Retouren, Aktivitäts-Log, UI für Katalog, Lager, Einkauf, Wareneingang, Verkauf, Lieferanten und Administration  
-**Gesamt geschriebene Tests:** 1 produktiver SQLite-Schematest  
-**Gesamt erfasste Commits in diesem Changelog:** 34  
+**Gesamt implementierte Schwerpunkte:** getrenntes Katalog-/Stock-/Ledger-Modell, Multi-Warehouse-Bestand, SQLite/PostgreSQL-Setup, rollenbasierte Authentifizierung, strukturierte Standorte mit OSM-Autocomplete, mehrzeilige Einkaufsbestellungen, Wareneingang je Lagerort, Verkauf und Retouren, Aktivitäts-Log, UI für Katalog, Lager, Einkauf, Wareneingang, Verkauf, Lieferanten und Administration  
+**Gesamt geschriebene Tests:** 2 produktive Python-Testsuiten  
+**Gesamt erfasste Commits in diesem Changelog:** 39  
 **Größte Herausforderung:** Das Datenmodell zwischen Frontend, API und Persistenz konsistent weiterzuentwickeln, ohne den bestehenden `src1`-Flow zu zerbrechen  
 **Schönste Code-Idee:** Die automatische Pflege der Buch-Lieferanten-Zuordnung beim Persistieren statt reiner Einzel-FK-Logik
 

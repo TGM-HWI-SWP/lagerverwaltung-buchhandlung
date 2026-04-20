@@ -6,22 +6,14 @@ interface SettingsPageProps {
   card: string;
   dark: boolean;
   settings: AppSettings;
-  setSettings: React.Dispatch<React.SetStateAction<AppSettings>>;
-  onSeedDemoData: () => Promise<void>;
-  onClearDemoData: () => Promise<void>;
-  demoDataBusy: boolean;
-  demoDataStatus: string | null;
+  onChange: React.Dispatch<React.SetStateAction<AppSettings>>;
 }
 
 export function SettingsPage({
   card,
   dark,
   settings,
-  setSettings,
-  onSeedDemoData,
-  onClearDemoData,
-  demoDataBusy,
-  demoDataStatus,
+  onChange,
 }: SettingsPageProps) {
   const defaultSettings: AppSettings = {
     lowStockThreshold: 5,
@@ -50,7 +42,7 @@ export function SettingsPage({
                 className={`w-24 rounded-lg border px-3 py-2 ${dark ? "border-gray-700 bg-gray-900 text-white" : "border-gray-300 bg-white"}`}
                 value={settings.lowStockThreshold}
                 onChange={(e) =>
-                  setSettings((prev) => ({
+                  onChange((prev) => ({
                     ...prev,
                     lowStockThreshold: Math.max(1, Number(e.target.value) || 5),
                   }))
@@ -67,7 +59,7 @@ export function SettingsPage({
               </div>
               <button
                 type="button"
-                onClick={() => setSettings((prev) => ({ ...prev, confirmDelete: !prev.confirmDelete }))}
+                onClick={() => onChange((prev) => ({ ...prev, confirmDelete: !prev.confirmDelete }))}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                   settings.confirmDelete ? "bg-blue-600" : "bg-gray-300"
                 }`}
@@ -90,7 +82,7 @@ export function SettingsPage({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setSettings((prev) => ({ ...prev, autoRefresh: !prev.autoRefresh }))}
+                  onClick={() => onChange((prev) => ({ ...prev, autoRefresh: !prev.autoRefresh }))}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                     settings.autoRefresh ? "bg-blue-600" : "bg-gray-300"
                   }`}
@@ -108,7 +100,7 @@ export function SettingsPage({
                     className={`w-24 rounded-lg border px-3 py-2 ${dark ? "border-gray-700 bg-gray-900 text-white" : "border-gray-300 bg-white"}`}
                     value={settings.autoRefreshSeconds}
                     onChange={(e) =>
-                      setSettings((prev) => ({
+                      onChange((prev) => ({
                         ...prev,
                         autoRefreshSeconds: Math.max(10, Number(e.target.value) || 30),
                       }))
@@ -120,19 +112,10 @@ export function SettingsPage({
 
             <div className="rounded-xl border p-4">
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={() => setSettings({ ...settings, ...defaultSettings })}>
+                <Button variant="outline" onClick={() => onChange({ ...settings, ...defaultSettings })}>
                   Standard wiederherstellen
                 </Button>
-                <Button variant="outline" onClick={onSeedDemoData} disabled={demoDataBusy}>
-                  {demoDataBusy ? "Lade Demo-Daten..." : "Demo-Daten laden"}
-                </Button>
-                <Button variant="destructive" onClick={onClearDemoData} disabled={demoDataBusy}>
-                  Demo-Daten löschen
-                </Button>
               </div>
-              {demoDataStatus ? (
-                <p className={`mt-3 text-sm ${dark ? "text-gray-300" : "text-gray-700"}`}>{demoDataStatus}</p>
-              ) : null}
             </div>
           </div>
         </CardContent>

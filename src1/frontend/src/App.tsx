@@ -274,7 +274,13 @@ export default function Dashboard() {
   }
 
   if (!me) {
-    return <LoginPage dark={dark} onLogin={(session) => setMe({ username: session.username, displayName: session.displayName, role: session.role })} />;
+    return (
+      <LoginPage
+        dark={dark}
+        onToggleDark={() => setDark((value) => !value)}
+        onLoggedIn={(session) => setMe({ username: session.username, displayName: session.displayName, role: session.role })}
+      />
+    );
   }
 
   const navItems = [
