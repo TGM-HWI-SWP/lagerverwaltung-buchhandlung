@@ -215,9 +215,9 @@ export function GoodsOutPage({
   };
 
   return (
-    <div className={`mx-auto w-full ${posMode ? "max-w-[1380px]" : ""}`}>
-      <div className={`grid items-start gap-6 ${posMode ? "xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[390px_minmax(0,1fr)]" : "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"}`}>
-      <Card className={posMode ? posCard : card}>
+    <div className={`mx-auto w-full ${posMode ? "max-w-[1700px]" : ""}`}>
+      <div className={`grid items-start gap-6 ${posMode ? "xl:grid-cols-[380px_minmax(0,1fr)]" : "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"}`}>
+      <Card className={`${posMode ? `${posCard} xl:sticky xl:top-6` : card}`}>
         <CardContent className={`${posMode ? "p-7" : "p-6"}`}>
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -302,47 +302,20 @@ export function GoodsOutPage({
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h2 className={`${posMode ? "text-2xl" : "text-xl"} font-semibold`}>Artikelwahl</h2>
-                <p className={`mt-1 text-sm ${mutedText}`}>Tippe einen Artikel an, um ihn links direkt zu verkaufen. Retoure und Verlauf liegen separat, damit hier mehr Platz für Produkte bleibt.</p>
+                <p className={`mt-1 text-sm ${mutedText}`}>Das Produktboard ist die Hauptfläche. Service-Funktionen wie Retoure und Verlauf liegen separat, damit der Verkauf nicht blockiert wird.</p>
               </div>
               <div className={`rounded-full px-4 py-2 text-sm ${dark ? "bg-gray-950 text-gray-300" : "bg-gray-50 text-gray-600"}`}>
                 {warehouseCode} · {selectableProducts.length} Artikel · {totalAvailable} Stk.
               </div>
             </div>
-            <div className={`mt-5 grid gap-3 ${posMode ? "lg:grid-cols-[minmax(0,1fr)_190px]" : ""}`}>
-              <input
-                className={`${inputClass} ${posMode ? "h-16 text-base" : ""}`}
-                placeholder="Produkte nach Titel oder SKU suchen"
-                value={productSearch}
-                onChange={(e) => setProductSearch(e.target.value)}
-              />
-              <button type="button" className={smallButtonClass} onClick={() => setProductSearch("")}>
-                Suche leeren
-              </button>
-            </div>
-            {productGrid.length ? (
-              <div className={`mt-6 grid gap-4 ${posMode ? "sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3" : "md:grid-cols-2 xl:grid-cols-3"}`}>
-                {productGrid.map((entry) => (
-                  <ProductTile key={entry.productId} entry={entry} />
-                ))}
-              </div>
-            ) : (
-              <div className={`mt-6 rounded-[1.6rem] border p-6 text-sm ${dark ? "border-gray-800 bg-gray-950/70 text-gray-300" : "border-gray-200 bg-gray-50 text-gray-600"}`}>
-                Keine Produkte für diese Suche gefunden.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className={posMode ? posCard : card}>
-          <CardContent className={`${posMode ? "p-7" : "p-6"}`}>
-            <div className="flex items-center justify-between gap-4">
+            <div className="mt-5 flex flex-wrap items-center gap-3">
               <div className="inline-flex rounded-2xl border p-1">
                 <button
                   type="button"
                   className={`rounded-xl px-4 py-2 text-sm font-medium transition ${salesTab === "sale" ? "bg-cyan-500 text-slate-950" : mutedText}`}
                   onClick={() => setSalesTab("sale")}
                 >
-                  Kassenhilfe
+                  Verkauf
                 </button>
                 <button
                   type="button"
@@ -361,27 +334,36 @@ export function GoodsOutPage({
               </div>
               {statusMessage ? <div className="text-sm text-cyan-400">{statusMessage}</div> : null}
             </div>
-
-            {salesTab === "sale" ? (
-              <div className={`mt-6 grid gap-4 ${posMode ? "lg:grid-cols-3" : "md:grid-cols-3"}`}>
-                <div className={`rounded-[1.6rem] border p-5 ${dark ? "border-gray-800 bg-gray-950/70" : "border-gray-200 bg-gray-50"}`}>
-                  <div className={`text-xs uppercase tracking-[0.18em] ${mutedText}`}>Ablauf</div>
-                  <div className="mt-3 text-lg font-semibold">1. Produkt antippen</div>
-                  <p className={`mt-2 text-sm ${mutedText}`}>Rechts einen Artikel aus der Kachelfläche wählen. Links wird er sofort in die Kasse übernommen.</p>
-                </div>
-                <div className={`rounded-[1.6rem] border p-5 ${dark ? "border-gray-800 bg-gray-950/70" : "border-gray-200 bg-gray-50"}`}>
-                  <div className={`text-xs uppercase tracking-[0.18em] ${mutedText}`}>Rabatt</div>
-                  <div className="mt-3 text-lg font-semibold">€ oder % direkt an der Kasse</div>
-                  <p className={`mt-2 text-sm ${mutedText}`}>Der eigene Rabatt sitzt links direkt unter der Menge und kann wahlweise als Euro- oder Prozentwert eingegeben werden.</p>
-                </div>
-                <div className={`rounded-[1.6rem] border p-5 ${dark ? "border-gray-800 bg-gray-950/70" : "border-gray-200 bg-gray-50"}`}>
-                  <div className={`text-xs uppercase tracking-[0.18em] ${mutedText}`}>Service</div>
-                  <div className="mt-3 text-lg font-semibold">Retoure und Historie separat</div>
-                  <p className={`mt-2 text-sm ${mutedText}`}>Damit mehr Platz für Produktkacheln bleibt, liegen Retoure und letzte Verkäufe jetzt in eigenen Tabs.</p>
+            <div className={`mt-5 grid gap-3 ${posMode ? "lg:grid-cols-[minmax(0,1fr)_190px]" : ""}`}>
+              <input
+                className={`${inputClass} ${posMode ? "h-16 text-base" : ""}`}
+                placeholder="Produkte nach Titel oder SKU suchen"
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+              />
+              <button type="button" className={smallButtonClass} onClick={() => setProductSearch("")}>
+                Suche leeren
+              </button>
+            </div>
+            {productGrid.length ? (
+              <div className={`mt-6 grid gap-4 ${posMode ? "min-h-[580px] sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" : "md:grid-cols-2 xl:grid-cols-3"}`}>
+                {productGrid.map((entry) => (
+                  <ProductTile key={entry.productId} entry={entry} />
+                ))}
+              </div>
+            ) : (
+              <div className={`mt-6 flex min-h-[580px] items-center justify-center rounded-[1.6rem] border p-6 text-sm ${dark ? "border-gray-800 bg-gray-950/70 text-gray-300" : "border-gray-200 bg-gray-50 text-gray-600"}`}>
+                <div className="max-w-md text-center">
+                  <div className="text-lg font-semibold text-white dark:text-white">Keine Produkte für diese Suche gefunden</div>
+                  <div className={`mt-2 ${mutedText}`}>Wähle links einen Lagerort oder suche nach Titel und SKU. In der finalen Kassenansicht sollen hier die großen antippbaren Produktkacheln sitzen.</div>
                 </div>
               </div>
-            ) : null}
+            )}
+          </CardContent>
+        </Card>
 
+        <Card className={posMode ? `${posCard} ${salesTab === "sale" ? "hidden" : ""}` : card}>
+          <CardContent className={`${posMode ? "p-7" : "p-6"}`}>
             {salesTab === "returns" ? (
               <div className={`mt-6 grid gap-6 ${posMode ? "2xl:grid-cols-[minmax(0,1.15fr)_360px]" : "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"}`}>
                 <Card className={dark ? "border-gray-800 bg-gray-950/50" : "border-gray-200 bg-gray-50"}>
@@ -480,6 +462,11 @@ export function GoodsOutPage({
             ) : null}
           </CardContent>
         </Card>
+        {posMode && salesTab === "sale" ? (
+          <div className={`rounded-[1.6rem] border px-5 py-4 text-sm ${dark ? "border-cyan-500/10 bg-gray-950/40 text-gray-300" : "border-cyan-100 bg-cyan-50 text-gray-700"}`}>
+            Tippe rechts einen Artikel an. Retoure und letzte Verkäufe liegen oben in eigenen Tabs, damit die Produktfläche auf 16:9- und Tablet-Screens frei bleibt.
+          </div>
+        ) : null}
       </div>
       </div>
     </div>

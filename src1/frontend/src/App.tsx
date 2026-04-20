@@ -302,7 +302,7 @@ export default function Dashboard() {
 
   return (
     <div className={shell}>
-      <div className={`mx-auto flex min-h-screen gap-4 p-4 lg:p-6 ${isPosMode ? "max-w-[1480px]" : "max-w-[1760px]"}`}>
+      <div className={`mx-auto flex min-h-screen gap-4 p-4 lg:p-6 ${isPosMode ? "max-w-[1820px]" : "max-w-[1760px]"}`}>
         <aside className={`hidden w-[24rem] shrink-0 rounded-[2rem] border p-6 lg:flex lg:flex-col ${sidebar} ${isPosMode ? "lg:hidden" : ""}`}>
           <div>
             <h1 className="text-[2.15rem] font-semibold leading-[1.1] tracking-[-0.02em]">Buchhandlungsverwaltung</h1>
