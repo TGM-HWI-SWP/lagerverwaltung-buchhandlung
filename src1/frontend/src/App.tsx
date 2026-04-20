@@ -110,6 +110,8 @@ const PAGE_DESCRIPTIONS: Record<PageKey, string> = {
   mitarbeiter: "PIN-Logins und Rollen für das Team verwalten.",
 };
 
+const CASHIER_ALLOWED_PAGES: PageKey[] = ["dashboard", "verkauf", "einstellungen"];
+
 export default function Dashboard() {
   const [dark, setDark] = useState(true);
   const [page, setPage] = useState<PageKey>("dashboard");
@@ -245,7 +247,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (isAdmin) return;
-    if (page !== "verkauf") setPage("verkauf");
+    if (!CASHIER_ALLOWED_PAGES.includes(page)) setPage("verkauf");
   }, [isAdmin, page]);
 
   const stats = useMemo(() => {
@@ -299,12 +301,11 @@ export default function Dashboard() {
 
   return (
     <div className={shell}>
-      <div className="mx-auto flex min-h-screen max-w-[1680px] gap-4 p-4 lg:p-6">
-        <aside className={`hidden w-80 shrink-0 rounded-[2rem] border p-6 lg:flex lg:flex-col ${sidebar}`}>
+      <div className="mx-auto flex min-h-screen max-w-[1760px] gap-4 p-4 lg:p-6">
+        <aside className={`hidden w-[24rem] shrink-0 rounded-[2rem] border p-6 lg:flex lg:flex-col ${sidebar}`}>
           <div>
-            <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400">Buchhandlung · Lager · Verkauf</div>
-            <h1 className="mt-3 text-[2rem] font-semibold leading-tight">Buchhandlungsverwaltung</h1>
-            <p className={`mt-3 max-w-xs text-sm leading-6 ${mutedText}`}>Katalog, Lagerorte, Lieferanten, Einkauf und Verkauf in einer klaren Oberfläche.</p>
+            <h1 className="text-[2.15rem] font-semibold leading-[1.1] tracking-[-0.02em]">Buchhandlungsverwaltung</h1>
+            <p className={`mt-4 max-w-sm text-sm leading-6 ${mutedText}`}>Katalog, Lagerorte, Lieferanten, Einkauf und Verkauf in einer klaren Oberfläche.</p>
           </div>
           <nav className="mt-8 flex flex-col gap-2">
             {navItems.map((item) => (
@@ -313,34 +314,6 @@ export default function Dashboard() {
               </MenuButton>
             ))}
           </nav>
-          <div className={`mt-auto rounded-[1.75rem] border p-5 ${dark ? "border-gray-800 bg-gray-900/80" : "border-gray-200 bg-gray-50"}`}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="truncate text-base font-semibold">{me.displayName}</div>
-                <div className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] ${dark ? "bg-gray-800 text-gray-300" : "bg-gray-200 text-gray-600"}`}>
-                  {me.role === "admin" ? "Admin" : "Kasse"}
-                </div>
-              </div>
-            </div>
-            <div className="mt-5 flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" className="h-11 px-4" onClick={() => setDark((value) => !value)}>
-                {dark ? <Sun size={15} className="mr-2" /> : <Moon size={15} className="mr-2" />}
-                {dark ? "Hell" : "Dunkel"}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-11 px-4"
-                onClick={() => {
-                  setAuthToken(null);
-                  setMe(null);
-                }}
-              >
-                <LogOut size={15} className="mr-2" />
-                Abmelden
-              </Button>
-            </div>
-          </div>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col gap-4">
@@ -355,6 +328,9 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="hidden items-center gap-2 sm:flex">
+              <div className={`rounded-full px-3 py-2 text-sm ${dark ? "bg-gray-900/80 text-gray-200" : "bg-white text-gray-700 shadow-sm"}`}>
+                {me.displayName}
+              </div>
               <Button variant="outline" onClick={() => setDark((value) => !value)}>
                 {dark ? <Sun size={15} className="mr-2" /> : <Moon size={15} className="mr-2" />}
                 {dark ? "Hell" : "Dunkel"}

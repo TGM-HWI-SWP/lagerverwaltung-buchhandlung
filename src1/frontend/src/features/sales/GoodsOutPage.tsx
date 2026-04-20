@@ -44,6 +44,9 @@ export function GoodsOutPage({
     ? "w-full rounded-2xl border border-gray-700 bg-gray-950 px-4 py-3 text-sm text-white placeholder:text-gray-400"
     : "w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 placeholder:text-gray-500";
   const mutedText = dark ? "text-gray-400" : "text-gray-500";
+  const keypadButtonClass = dark
+    ? "rounded-2xl border border-gray-800 bg-gray-950/80 px-4 py-4 text-center text-lg font-semibold text-white transition hover:border-cyan-500/50 hover:bg-gray-900"
+    : "rounded-2xl border border-gray-300 bg-white px-4 py-4 text-center text-lg font-semibold text-gray-900 transition hover:border-cyan-400 hover:bg-cyan-50";
   const currentStock = stockEntries.filter((entry) => entry.warehouseCode === warehouseCode);
   const selectableProducts = useMemo(
     () => currentStock.filter((entry) => entry.onHand > 0).sort((a, b) => a.title.localeCompare(b.title)),
@@ -102,6 +105,54 @@ export function GoodsOutPage({
     }
   };
 
+  const updateNumericField = (
+    value: string,
+    key: string,
+    setter: (next: string) => void,
+    minimum = 1,
+  ) => {
+    if (key === "del") {
+      const next = value.slice(0, -1);
+      setter(next === "" ? String(minimum) : next);
+      return;
+    }
+    if (key === "clr") {
+      setter(String(minimum));
+      return;
+    }
+    const sanitized = value === "0" ? key : `${value}${key}`;
+    setter(String(Math.max(minimum, Number(sanitized) || minimum)));
+  };
+
+  const QuantityKeypad = ({
+    value,
+    onChange,
+    label,
+  }: {
+    value: string;
+    onChange: (next: string) => void;
+    label: string;
+  }) => (
+    <div className="space-y-3">
+      <div className={`rounded-2xl border px-4 py-3 text-center text-3xl font-semibold tracking-[0.2em] ${dark ? "border-gray-800 bg-gray-950 text-white" : "border-gray-200 bg-gray-50 text-gray-900"}`}>
+        {String(Math.max(1, Number(value) || 1)).padStart(2, "0")}
+      </div>
+      <p className={`text-xs uppercase tracking-[0.18em] ${mutedText}`}>{label}</p>
+      <div className="grid grid-cols-3 gap-3">
+        {["1", "2", "3", "4", "5", "6", "7", "8", "9", "clr", "0", "del"].map((key) => (
+          <button
+            key={key}
+            type="button"
+            className={keypadButtonClass}
+            onClick={() => updateNumericField(value, key, onChange)}
+          >
+            {key === "del" ? "←" : key === "clr" ? "C" : key}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <Card className={card}>
@@ -124,9 +175,12 @@ export function GoodsOutPage({
                 </option>
               ))}
             </select>
-            <div className="grid gap-3 md:grid-cols-2">
-              <input className={inputClass} inputMode="numeric" placeholder="Menge" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
-              <input className={inputClass} inputMode="decimal" placeholder="Zusätzlicher Rabatt" value={customDiscountAmount} onChange={(e) => setCustomDiscountAmount(e.target.value)} />
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">
+              <div className="grid gap-3 md:grid-cols-2">
+                <input className={inputClass} inputMode="numeric" placeholder="Menge" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+                <input className={inputClass} inputMode="decimal" placeholder="Zusätzlicher Rabatt" value={customDiscountAmount} onChange={(e) => setCustomDiscountAmount(e.target.value)} />
+              </div>
+              <QuantityKeypad value={quantity} onChange={setQuantity} label="Touch-Menge" />
             </div>
             <label className={`text-sm ${mutedText}`}>
               <input type="checkbox" checked={isFirstCustomer} onChange={(e) => setIsFirstCustomer(e.target.checked)} /> Erstkunde
@@ -164,9 +218,12 @@ export function GoodsOutPage({
                 </option>
               ))}
             </select>
-            <div className="grid gap-3 md:grid-cols-2">
-              <input className={inputClass} inputMode="numeric" placeholder="Retourmenge" value={returnQuantity} onChange={(e) => setReturnQuantity(e.target.value)} />
-              <input className={inputClass} placeholder="Grund" value={returnReason} onChange={(e) => setReturnReason(e.target.value)} />
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">
+              <div className="grid gap-3 md:grid-cols-2">
+                <input className={inputClass} inputMode="numeric" placeholder="Retourmenge" value={returnQuantity} onChange={(e) => setReturnQuantity(e.target.value)} />
+                <input className={inputClass} placeholder="Grund" value={returnReason} onChange={(e) => setReturnReason(e.target.value)} />
+              </div>
+              <QuantityKeypad value={returnQuantity} onChange={setReturnQuantity} label="Touch-Retoure" />
             </div>
             <Button variant="outline" onClick={createReturn} disabled={busy}>
               {busy ? "Buche..." : "Retoure buchen"}
