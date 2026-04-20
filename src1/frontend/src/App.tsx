@@ -299,12 +299,12 @@ export default function Dashboard() {
 
   return (
     <div className={shell}>
-      <div className="mx-auto flex min-h-screen max-w-[1600px] gap-4 p-4 lg:p-6">
-        <aside className={`hidden w-72 shrink-0 rounded-[2rem] border p-5 lg:flex lg:flex-col ${sidebar}`}>
+      <div className="mx-auto flex min-h-screen max-w-[1680px] gap-4 p-4 lg:p-6">
+        <aside className={`hidden w-80 shrink-0 rounded-[2rem] border p-6 lg:flex lg:flex-col ${sidebar}`}>
           <div>
-            <div className="text-xs uppercase tracking-[0.3em] text-cyan-400">Catalog / Stock / Ledger</div>
-            <h1 className="mt-3 text-2xl font-semibold">Buchhandlungsverwaltung</h1>
-            <p className={`mt-2 text-sm ${mutedText}`}>Katalog, Lagerorte, Ledger, Einkauf und Verkauf jetzt sauber getrennt.</p>
+            <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400">Buchhandlung · Lager · Verkauf</div>
+            <h1 className="mt-3 text-[2rem] font-semibold leading-tight">Buchhandlungsverwaltung</h1>
+            <p className={`mt-3 max-w-xs text-sm leading-6 ${mutedText}`}>Katalog, Lagerorte, Lieferanten, Einkauf und Verkauf in einer klaren Oberfläche.</p>
           </div>
           <nav className="mt-8 flex flex-col gap-2">
             {navItems.map((item) => (
@@ -313,16 +313,24 @@ export default function Dashboard() {
               </MenuButton>
             ))}
           </nav>
-          <div className={`mt-auto rounded-[1.5rem] border p-4 ${dark ? "border-gray-800 bg-gray-900/80" : "border-gray-200 bg-gray-50"}`}>
-            <div className="text-sm font-medium">{me.displayName}</div>
-            <div className={`mt-1 text-xs uppercase tracking-wide ${mutedText}`}>{me.role}</div>
-            <div className="mt-4 flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setDark((value) => !value)}>
-                {dark ? <Sun size={15} /> : <Moon size={15} />}
+          <div className={`mt-auto rounded-[1.75rem] border p-5 ${dark ? "border-gray-800 bg-gray-900/80" : "border-gray-200 bg-gray-50"}`}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="truncate text-base font-semibold">{me.displayName}</div>
+                <div className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] ${dark ? "bg-gray-800 text-gray-300" : "bg-gray-200 text-gray-600"}`}>
+                  {me.role === "admin" ? "Admin" : "Kasse"}
+                </div>
+              </div>
+            </div>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" className="h-11 px-4" onClick={() => setDark((value) => !value)}>
+                {dark ? <Sun size={15} className="mr-2" /> : <Moon size={15} className="mr-2" />}
+                {dark ? "Hell" : "Dunkel"}
               </Button>
               <Button
                 variant="outline"
                 size="sm"
+                className="h-11 px-4"
                 onClick={() => {
                   setAuthToken(null);
                   setMe(null);
@@ -453,8 +461,8 @@ export default function Dashboard() {
             <StaffUsersPage
               card={card}
               dark={dark}
-              staffUsers={staffUsers}
-              reloadStaffUsers={reloadStaffUsers}
+              users={staffUsers}
+              reloadUsers={reloadStaffUsers}
             />
           ) : null}
           {page === "einstellungen" ? <SettingsPage card={card} dark={dark} settings={settings} onChange={setSettings} /> : null}
