@@ -1,37 +1,23 @@
+import csv
+import io
+from datetime import datetime
 from uuid import uuid4
 
-from fastapi import FastAPI, Depends, HTTPException                             # FastAPI-Framework
-from fastapi.middleware.cors import CORSMiddleware                              # CORS-Middleware
-from fastapi.responses import JSONResponse, StreamingResponse                   # Streaming für PDF
-from sqlalchemy.orm import Session                                              # DB-Session
+from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
-import io                                                                       # PDF-Buffer
-from datetime import datetime                                                   # Zeitstempel im PDF
-import matplotlib                                                               # Plot-Library
-matplotlib.use("Agg")                                                           # Headless-Backend
-import matplotlib.pyplot as plt                                                 # Pyplot-API
-from matplotlib.backends.backend_pdf import PdfPages                            # PDF-Export
-
-from app.core.config import settings                                            # App-Konfiguration
-from app.core.bootstrap import get_database_health, initialize_application
-from app.core.errors import install_error_handlers
-from app.db.models import Book
-from app.db.models_auth import StaffUser
-from app.db.session import get_db                                               # DB-Verbindung
-from app.db.schemas import (                                                    # Pydantic-Schemas
-    BookSchema,
-    MovementSchema,
-    SupplierSchema,
-    SupplierStockEntry,
-    SupplierOrderRequest,
-    PurchaseOrderSchema,
-    ReceivePurchaseOrderRequest,
-    IncomingDeliverySchema,
-    BookIncomingDeliveryRequest,
-)
-from app.api import books, inventory, suppliers, activity, auth as auth_api
+from app.api import activity, auth as auth_api
 from app.core.auth_staff import hash_password, hash_pin, require_admin, require_user
+from app.core.bootstrap import get_database_health, initialize_application
+from app.core.config import settings
+from app.core.errors import install_error_handlers
+from app.db.models import Supplier
+from app.db.models_auth import StaffUser
+from app.db.models_commerce import CatalogProduct, PurchaseOrderV2Line, SalesOrder, StockItem, StockLedgerEntry, Warehouse
+from app.db.schemas import SupplierSchema
 from app.db.schemas_auth import (
     AdminLoginRequest,
     BootstrapAdminRequest,
@@ -43,6 +29,28 @@ from app.db.schemas_auth import (
     StaffUserUpdateRequest,
     WhoAmIResponse,
 )
+from app.db.schemas_commerce import (
+    CatalogProductCreateRequest,
+    CatalogProductSchema,
+    CatalogProductUpdateRequest,
+    ProductSupplierSchema,
+    ProductSupplierUpsertRequest,
+    PurchaseOrderCreateRequest,
+    PurchaseOrderResponse,
+    PurchaseOrderReceiveRequest,
+    ReturnCreateRequest,
+    ReturnOrderResponse,
+    SaleCreateRequest,
+    SaleOrderResponse,
+    StockAdjustmentRequest,
+    StockEntrySchema,
+    StockLedgerEntrySchema,
+    WarehouseCreateRequest,
+    WarehouseSchema,
+    WarehouseUpdateRequest,
+)
+from app.db.session import get_db
+from app.services.commerce import CommerceService
 
 
 def _staff_summary(row: StaffUser) -> StaffUserSummary:
@@ -59,17 +67,14 @@ def _list_staff_users(db: Session, *, role: str | None = None) -> list[StaffUser
     query = db.query(StaffUser).filter(StaffUser.is_active == True)  # noqa: E712
     if role is not None:
         query = query.filter(StaffUser.role == role)
-    rows = query.order_by(StaffUser.role.desc(), StaffUser.display_name.asc()).all()
-    return [_staff_summary(row) for row in rows]
+    return [_staff_summary(row) for row in query.order_by(StaffUser.role.desc(), StaffUser.display_name.asc()).all()]
 
 
-def _clamp_pagination(offset: int, limit: int, *, max_limit: int = 100) -> tuple[int, int]:
-    offset = max(0, int(offset))
-    limit = max(1, int(limit))
-    limit = min(limit, max_limit)
-    return offset, limit
+def _service(db: Session) -> CommerceService:
+    return CommerceService(db)
 
-app = FastAPI(title=settings.app_name)                                          # App-Instanz
+
+app = FastAPI(title=settings.app_name)
 
 install_error_handlers(app)
 
@@ -80,10 +85,10 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-    ],                                                                            # Frontend-URLs
-    allow_credentials=True,                                                     # Cookies erlauben
-    allow_methods=["*"],                                                        # Alle Methoden
-    allow_headers=["*"],                                                        # Alle Header
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -130,12 +135,10 @@ def auth_bootstrap_admin(payload: BootstrapAdminRequest, db: Session = Depends(g
     admin_count = db.query(StaffUser).filter(StaffUser.role == "admin", StaffUser.is_active == True).count()  # noqa: E712
     if admin_count > 0:
         raise HTTPException(status_code=409, detail="Admin ist bereits eingerichtet")
-
     username = payload.username.strip().lower()
     existing = db.query(StaffUser).filter(StaffUser.username == username).first()
     if existing:
         raise HTTPException(status_code=409, detail="Benutzername bereits vergeben")
-
     created = StaffUser(
         id=f"U{uuid4().hex[:8].upper()}",
         username=username,
@@ -149,13 +152,7 @@ def auth_bootstrap_admin(payload: BootstrapAdminRequest, db: Session = Depends(g
     db.add(created)
     db.commit()
     db.refresh(created)
-    return StaffUserSummary(
-        id=created.id,
-        username=created.username,
-        display_name=created.display_name,
-        role=created.role,
-        avatar_image=created.avatar_image or "",
-    )
+    return _staff_summary(created)
 
 
 @app.post("/auth/cashier-login", response_model=LoginResponse)
@@ -169,16 +166,13 @@ def auth_me(user=Depends(require_user)):
 
 
 @app.get("/staff-users", response_model=list[StaffUserSummary])
-def read_staff_users(
-    db: Session = Depends(get_db),
-    user=Depends(require_admin),
-):
+def read_staff_users(db: Session = Depends(get_db), user=Depends(require_admin)):
     return _list_staff_users(db)
 
 
 @app.get("/staff-users/cashier-list", response_model=list[StaffUserSummary])
 def read_cashier_list(db: Session = Depends(get_db)):
-    return _list_staff_users(db)
+    return _list_staff_users(db, role="cashier")
 
 
 @app.get("/staff-users/admin-list", response_model=list[StaffUserSummary])
@@ -193,21 +187,16 @@ def create_staff_user(
     user=Depends(require_admin),
 ):
     username = payload.username.strip().lower()
-    display_name = payload.display_name.strip()
     role = payload.role.strip().lower() if payload.role else "cashier"
     if role not in {"cashier", "admin"}:
         raise HTTPException(status_code=400, detail="Ungültige Rolle")
-    if role == "admin" and len(payload.password.strip()) < 12:
-        raise HTTPException(status_code=400, detail="Admin-Passwort muss mindestens 12 Zeichen haben")
-
     existing = db.query(StaffUser).filter(StaffUser.username == username).first()
     if existing:
         raise HTTPException(status_code=409, detail="Benutzername bereits vergeben")
-
     created = StaffUser(
         id=f"U{uuid4().hex[:8].upper()}",
         username=username,
-        display_name=display_name,
+        display_name=payload.display_name.strip(),
         role=role,
         pin_hash=hash_pin(payload.pin),
         password_hash=hash_password(payload.password) if role == "admin" else "",
@@ -217,13 +206,7 @@ def create_staff_user(
     db.add(created)
     db.commit()
     db.refresh(created)
-    return StaffUserSummary(
-        id=created.id,
-        username=created.username,
-        display_name=created.display_name,
-        role=created.role,
-        avatar_image=created.avatar_image or "",
-    )
+    return _staff_summary(created)
 
 
 @app.put("/staff-users/{user_id}", response_model=StaffUserSummary)
@@ -236,389 +219,244 @@ def update_staff_user(
     staff_user = db.query(StaffUser).filter(StaffUser.id == user_id).first()
     if not staff_user:
         raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden")
-    
-    updates = {}
     if payload.display_name is not None:
-        updates["display_name"] = payload.display_name.strip()
+        staff_user.display_name = payload.display_name.strip()
     if payload.pin is not None:
-        updates["pin_hash"] = hash_pin(payload.pin)
+        staff_user.pin_hash = hash_pin(payload.pin)
     if payload.role is not None:
         role = payload.role.strip().lower()
         if role not in {"cashier", "admin"}:
             raise HTTPException(status_code=400, detail="Ungültige Rolle")
-        updates["role"] = role
-        if role == "admin" and not staff_user.password_hash:
-            # Wenn Admin wird, aber kein Passwort hat, muss eins gesetzt werden
-            raise HTTPException(
-                status_code=400, 
-                detail="Admin benötigt ein Passwort. Bitte setzen Sie ein Passwort mit dem Passwort-Feld."
-            )
+        staff_user.role = role
     if payload.password is not None:
-        if payload.password.strip() and len(payload.password.strip()) >= 12:
-            updates["password_hash"] = hash_password(payload.password)
-        elif payload.password.strip() == "":
-            updates["password_hash"] = ""
-        else:
-            raise HTTPException(status_code=400, detail="Admin-Passwort muss mindestens 12 Zeichen haben")
+        staff_user.password_hash = hash_password(payload.password) if payload.password.strip() else ""
     if payload.avatar_image is not None:
-        updates["avatar_image"] = payload.avatar_image
-    if payload.is_active is not None:
-        updates["is_active"] = payload.is_active
-    
-    for key, value in updates.items():
-        setattr(staff_user, key, value)
-    
+        staff_user.avatar_image = payload.avatar_image
     db.commit()
     db.refresh(staff_user)
-    
     return _staff_summary(staff_user)
 
 
 @app.delete("/staff-users/{user_id}")
-def delete_staff_user(
-    user_id: str,
-    db: Session = Depends(get_db),
-    user=Depends(require_admin),
-):
+def delete_staff_user(user_id: str, db: Session = Depends(get_db), user=Depends(require_admin)):
     staff_user = db.query(StaffUser).filter(StaffUser.id == user_id).first()
     if not staff_user:
         raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden")
-    
-    # Soft delete: is_active auf False setzen
     staff_user.is_active = False
     db.commit()
-    
     return {"detail": "Mitarbeiter deaktiviert"}
 
 
-# ── Test Data ──────────────────────────────────────────────
-
-
-@app.post("/test-data/seed", status_code=201)
-def seed_test_data(
-    db: Session = Depends(get_db),
-    user=Depends(require_admin),
-):
-    """Lädt Demo-Daten für alle Bereiche (Bücher, Lager, Verkäufe, Lieferanten, Staff-User)."""
-    try:
-        from app.services.test_data import seed_all_test_data
-        result = seed_all_test_data(db)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Fehler beim Laden der Demo-Daten: {str(e)}")
-
-
-@app.delete("/test-data/clear")
-def clear_test_data(
-    db: Session = Depends(get_db),
-    user=Depends(require_admin),
-):
-    """Löscht nur Demo-Daten (markierte Test-Einträge)."""
-    try:
-        from app.services.test_data import clear_all_test_data
-        result = clear_all_test_data(db)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Fehler beim Löschen der Demo-Daten: {str(e)}")
-
-
-# ── Books ──────────────────────────────────────────────
-
-
-@app.get("/books", response_model=list[BookSchema])  # Alle Bücher holen
-def read_books(
-    db: Session = Depends(get_db),
-    offset: int = 0,
-    limit: int = 50,
-):
-    offset, limit = _clamp_pagination(offset, limit)
-    return books.get_all_books(db, offset=offset, limit=limit)
-
-
-@app.get("/books/{book_id}", response_model=BookSchema)                         # Buch per ID holen
-def read_book(book_id: str, db: Session = Depends(get_db)):
-    book = books.get_book(db, book_id)
-    if book is None:                                                            # Nicht gefunden
-        raise HTTPException(status_code=404, detail="Buch nicht gefunden")
-    return book
-
-
-@app.post("/books", response_model=BookSchema, status_code=201)  # Buch anlegen
-def create_book(
-    book: BookSchema,
-    db: Session = Depends(get_db),
-    user=Depends(require_admin),
-):
-    try:
-        return books.create_book(db, book)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.put("/books/{book_id}", response_model=BookSchema)  # Buch aktualisieren
-def update_book(
-    book_id: str,
-    book: BookSchema,
-    db: Session = Depends(get_db),
-    user=Depends(require_admin),
-):
-    try:
-        updated = books.update_book(db, book_id, book)
-        if updated is None:  # Nicht gefunden
-            raise HTTPException(status_code=404, detail="Buch nicht gefunden")
-        return updated
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.delete("/books/{book_id}")  # Buch löschen
-def delete_book(
-    book_id: str,
-    db: Session = Depends(get_db),
-    user=Depends(require_admin),
-):
-    try:
-        if not books.delete_book(db, book_id):
-            raise HTTPException(status_code=404, detail="Buch nicht gefunden")
-        return {"detail": "Buch gelöscht"}
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-# ── Movements ──────────────────────────────────────────
-
-
-@app.get("/movements", response_model=list[MovementSchema])  # Alle Bewegungen holen
-def read_movements(
-    db: Session = Depends(get_db),
-    offset: int = 0,
-    limit: int = 50,
-):
-    offset, limit = _clamp_pagination(offset, limit)
-    return inventory.get_all_movements(db, offset=offset, limit=limit)
-
-
-@app.get("/movements/{movement_id}", response_model=MovementSchema)             # Bewegung per ID holen
-def read_movement(movement_id: str, db: Session = Depends(get_db)):
-    movement = inventory.get_movement(db, movement_id)
-    if movement is None:                                                        # Nicht gefunden
-        raise HTTPException(status_code=404, detail="Bewegung nicht gefunden")
-    return movement
-
-
-@app.post("/movements", response_model=MovementSchema, status_code=201)  # Bewegung anlegen
-def create_movement(
-    movement: MovementSchema,
+@app.get("/catalog-products", response_model=list[CatalogProductSchema])
+def read_catalog_products(
+    include_inactive: bool = Query(False),
     db: Session = Depends(get_db),
     user=Depends(require_user),
 ):
+    return _service(db).list_catalog_products(include_inactive)
+
+
+@app.get("/catalog-products/{product_id}", response_model=CatalogProductSchema)
+def read_catalog_product(product_id: str, db: Session = Depends(get_db), user=Depends(require_user)):
     try:
-        # Ensure movements are attributed to the logged-in staff user.
-        movement = movement.model_copy(update={"performed_by": user.username})
-        return inventory.create_movement(db, movement)
+        return _service(db).get_catalog_product(product_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/catalog-products", response_model=CatalogProductSchema, status_code=201)
+def create_catalog_product(
+    payload: CatalogProductCreateRequest,
+    db: Session = Depends(get_db),
+    user=Depends(require_admin),
+):
+    try:
+        return _service(db).create_catalog_product(payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.put("/movements/{movement_id}", status_code=409)  # Bewegung aktualisieren
-def update_movement(
-    movement_id: str,
-    movement: MovementSchema,
-    user=Depends(require_admin),
-):
-    raise HTTPException(
-        status_code=409,
-        detail="Lagerbewegungen sind unveränderlich. Bitte eine neue CORRECTION-Bewegung anlegen.",
-    )
-
-
-@app.delete("/movements/{movement_id}", status_code=409)  # Bewegung löschen
-def delete_movement(
-    movement_id: str,
-    user=Depends(require_admin),
-):
-    raise HTTPException(
-        status_code=409,
-        detail="Lagerbewegungen sind unveränderlich und können nicht gelöscht werden.",
-    )
-
-
-# ── Inventory ──────────────────────────────────────────
-
-
-@app.get("/inventory")                                                          # Lager-Übersicht
-def inventory_summary(db: Session = Depends(get_db)):
-    total_titles = db.query(func.count(Book.id)).scalar() or 0
-    total_units = db.query(func.coalesce(func.sum(Book.quantity), 0)).scalar() or 0
-    low_stock = db.query(Book).filter(Book.quantity <= 5).order_by(Book.quantity.asc()).all()
-    return {
-        "total_titles": total_titles,
-        "total_units": int(total_units),
-        "low_stock_books": [BookSchema.model_validate(book).model_dump() for book in low_stock],
-    }
-
-
-# ── Reports ────────────────────────────────────────────
-
-
-@app.get("/reports/inventory-pdf")                                              # PDF-Report
-def inventory_pdf(db: Session = Depends(get_db)):
-    rows = (                                                                    # Bestand pro Kategorie
-        db.query(Book.category, func.coalesce(func.sum(Book.quantity), 0))
-        .group_by(Book.category)
-        .all()
-    )
-    data = [(cat or "Ohne Kategorie", int(qty)) for cat, qty in rows if int(qty) > 0]
-    if not data:                                                                # Leerer Bestand
-        data = [("Keine Daten", 1)]
-
-    labels = [d[0] for d in data]
-    sizes = [d[1] for d in data]
-
-    buffer = io.BytesIO()
-    with PdfPages(buffer) as pdf:
-        fig, ax = plt.subplots(figsize=(8.27, 11.69))                           # A4-Hochformat
-        ax.pie(sizes, labels=labels, autopct="%1.1f%%", startangle=90)
-        ax.axis("equal")
-        timestamp = datetime.now().strftime("%d.%m.%Y %H:%M")
-        fig.suptitle(f"Lagerbestand nach Kategorien\nStand: {timestamp}", fontsize=14)
-        pdf.savefig(fig)
-        plt.close(fig)
-
-    buffer.seek(0)
-    headers = {"Content-Disposition": 'attachment; filename="lagerbestand.pdf"'}
-    return StreamingResponse(buffer, media_type="application/pdf", headers=headers)
-
-
-# ── Suppliers ──────────────────────────────────────────
-
-
-@app.get("/suppliers", response_model=list[SupplierSchema])  # Alle Lieferanten
-def read_suppliers(
+@app.put("/catalog-products/{product_id}", response_model=CatalogProductSchema)
+def update_catalog_product(
+    product_id: str,
+    payload: CatalogProductUpdateRequest,
     db: Session = Depends(get_db),
-    offset: int = 0,
-    limit: int = 50,
+    user=Depends(require_admin),
 ):
-    offset, limit = _clamp_pagination(offset, limit)
-    return suppliers.get_all_suppliers(db, offset=offset, limit=limit)
+    try:
+        return _service(db).update_catalog_product(product_id, payload)
+    except ValueError as exc:
+        status_code = 404 if "nicht gefunden" in str(exc) else 400
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
 
 
-@app.get("/suppliers/{supplier_id}", response_model=SupplierSchema)  # Lieferant per ID
-def read_supplier(supplier_id: str, db: Session = Depends(get_db)):
-    supplier = suppliers.get_supplier(db, supplier_id)
-    if supplier is None:
-        raise HTTPException(status_code=404, detail="Lieferant nicht gefunden")
-    return supplier
+@app.delete("/catalog-products/{product_id}")
+def delete_catalog_product(product_id: str, db: Session = Depends(get_db), user=Depends(require_admin)):
+    try:
+        return _service(db).delete_catalog_product(product_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@app.get("/suppliers/{supplier_id}/stock", response_model=list[SupplierStockEntry])  # Lager des Lieferanten
-def read_supplier_stock(supplier_id: str, db: Session = Depends(get_db)):
-    if suppliers.get_supplier(db, supplier_id) is None:
-        raise HTTPException(status_code=404, detail="Lieferant nicht gefunden")
-    return suppliers.get_supplier_stock(db, supplier_id)
+@app.get("/warehouses", response_model=list[WarehouseSchema])
+def read_warehouses(db: Session = Depends(get_db), user=Depends(require_user)):
+    return _service(db).list_warehouses()
 
 
-@app.post("/suppliers/{supplier_id}/order", response_model=MovementSchema, status_code=201)  # Bestellen
-def order_from_supplier(
-    supplier_id: str,
-    order: SupplierOrderRequest,
+@app.post("/warehouses", response_model=WarehouseSchema, status_code=201)
+def create_warehouse(payload: WarehouseCreateRequest, db: Session = Depends(get_db), user=Depends(require_admin)):
+    try:
+        return _service(db).create_warehouse(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.put("/warehouses/{warehouse_id}", response_model=WarehouseSchema)
+def update_warehouse(
+    warehouse_id: str,
+    payload: WarehouseUpdateRequest,
+    db: Session = Depends(get_db),
+    user=Depends(require_admin),
+):
+    try:
+        return _service(db).update_warehouse(warehouse_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/stock-items", response_model=list[StockEntrySchema])
+def read_stock_items(
+    include_zero: bool = Query(True),
+    warehouse_code: str | None = None,
+    product_id: str | None = None,
     db: Session = Depends(get_db),
     user=Depends(require_user),
 ):
+    return _service(db).list_stock(include_zero=include_zero, warehouse_code=warehouse_code, product_id=product_id)
+
+
+@app.post("/stock-adjustments", response_model=StockEntrySchema)
+def create_stock_adjustment(
+    payload: StockAdjustmentRequest,
+    db: Session = Depends(get_db),
+    user=Depends(require_admin),
+):
     try:
-        order = order.model_copy(update={"performed_by": user.username})
-        return suppliers.order_from_supplier(
-            db,
-            supplier_id=supplier_id,
-            book_id=order.book_id,
-            quantity=order.quantity,
-            performed_by=order.performed_by,
-        )
+        return _service(db).adjust_stock(payload, performed_by=user.user_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/suppliers", response_model=SupplierSchema, status_code=201)  # Lieferant anlegen
-def create_supplier(
-    supplier: SupplierSchema,
+@app.get("/stock-ledger", response_model=list[StockLedgerEntrySchema])
+def read_stock_ledger(
+    warehouse_code: str | None = None,
+    product_id: str | None = None,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=200),
+    db: Session = Depends(get_db),
+    user=Depends(require_user),
+):
+    return _service(db).list_stock_ledger(warehouse_code=warehouse_code, product_id=product_id, offset=offset, limit=limit)
+
+
+@app.get("/suppliers", response_model=list[SupplierSchema])
+def read_suppliers(db: Session = Depends(get_db), user=Depends(require_user)):
+    return _service(db).list_suppliers()
+
+
+@app.post("/suppliers", response_model=SupplierSchema, status_code=201)
+def create_supplier(payload: SupplierSchema, db: Session = Depends(get_db), user=Depends(require_admin)):
+    try:
+        return _service(db).create_supplier(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/product-suppliers/{product_id}", response_model=list[ProductSupplierSchema])
+def read_product_suppliers(product_id: str, db: Session = Depends(get_db), user=Depends(require_user)):
+    return _service(db).list_product_suppliers(product_id)
+
+
+@app.put("/product-suppliers/{product_id}", response_model=list[ProductSupplierSchema])
+def update_product_suppliers(
+    product_id: str,
+    payload: ProductSupplierUpsertRequest,
     db: Session = Depends(get_db),
     user=Depends(require_admin),
 ):
-    return suppliers.create_supplier(db, supplier)
+    try:
+        return _service(db).upsert_product_suppliers(product_id, payload)
+    except ValueError as exc:
+        status_code = 404 if "nicht gefunden" in str(exc) else 400
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
 
 
-@app.get("/purchase-orders", response_model=list[PurchaseOrderSchema])
-def read_purchase_orders(
-    db: Session = Depends(get_db),
-    offset: int = 0,
-    limit: int = 50,
-):
-    offset, limit = _clamp_pagination(offset, limit)
-    return suppliers.get_all_purchase_orders(db, offset=offset, limit=limit)
+@app.get("/purchase-orders", response_model=list[PurchaseOrderResponse])
+def read_purchase_orders(db: Session = Depends(get_db), user=Depends(require_user)):
+    return _service(db).list_purchase_orders()
 
 
-@app.post("/purchase-orders", response_model=PurchaseOrderSchema, status_code=201)
+@app.post("/purchase-orders", response_model=PurchaseOrderResponse, status_code=201)
 def create_purchase_order(
-    order: PurchaseOrderSchema,
+    payload: PurchaseOrderCreateRequest,
     db: Session = Depends(get_db),
     user=Depends(require_admin),
 ):
     try:
-        return suppliers.create_purchase_order(db, order)
+        return _service(db).create_purchase_order(payload, user.user_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/purchase-orders/{order_id}/receive", response_model=IncomingDeliverySchema)
+@app.post("/purchase-orders/{order_id}/receive", response_model=PurchaseOrderResponse)
 def receive_purchase_order(
     order_id: str,
-    payload: ReceivePurchaseOrderRequest,
+    payload: PurchaseOrderReceiveRequest,
     db: Session = Depends(get_db),
     user=Depends(require_admin),
 ):
     try:
-        return suppliers.receive_purchase_order(db, order_id, payload.quantity)
+        return _service(db).receive_purchase_order(order_id, payload, user.user_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.get("/incoming-deliveries", response_model=list[IncomingDeliverySchema])
-def read_incoming_deliveries(
-    db: Session = Depends(get_db),
-    offset: int = 0,
-    limit: int = 50,
-):
-    offset, limit = _clamp_pagination(offset, limit)
-    return suppliers.get_all_incoming_deliveries(db, offset=offset, limit=limit)
+@app.get("/sales-orders", response_model=list[SaleOrderResponse])
+def read_sales_orders(db: Session = Depends(get_db), user=Depends(require_user)):
+    return _service(db).list_sales_orders()
 
 
-@app.post("/incoming-deliveries/{delivery_id}/book", response_model=MovementSchema, status_code=201)
-def book_incoming_delivery(
-    delivery_id: str,
-    payload: BookIncomingDeliveryRequest,
+@app.post("/sales-orders", response_model=SaleOrderResponse, status_code=201)
+def create_sales_order(payload: SaleCreateRequest, db: Session = Depends(get_db), user=Depends(require_user)):
+    try:
+        return _service(db).create_sale(payload, user.user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/sales-orders/{order_id}/returns", response_model=ReturnOrderResponse, status_code=201)
+def create_sales_return(
+    order_id: str,
+    payload: ReturnCreateRequest,
     db: Session = Depends(get_db),
-    user=Depends(require_admin),
+    user=Depends(require_user),
 ):
     try:
-        return suppliers.book_incoming_delivery(db, delivery_id, performed_by=user.username)
+        return _service(db).create_return(order_id, payload, user.user_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-# ── Activity Logs ───────────────────────────────────────
 
 
 @app.get("/activity-logs")
 def read_activity_logs(
-    db: Session = Depends(get_db),
-    offset: int = 0,
-    limit: int = 50,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
     entity_type: str | None = None,
     entity_id: str | None = None,
     performed_by: str | None = None,
+    db: Session = Depends(get_db),
+    user=Depends(require_user),
 ):
-    """Audit log entries with optional filtering."""
-    offset, limit = _clamp_pagination(offset, limit)
     logs = activity.get_activity_logs(
         db,
         offset=offset,
@@ -627,160 +465,102 @@ def read_activity_logs(
         entity_id=entity_id,
         performed_by=performed_by,
     )
-    total = activity.count_activity_logs(
-        db,
-        entity_type=entity_type,
-        entity_id=entity_id,
-        performed_by=performed_by,
-    )
+    total = activity.count_activity_logs(db, entity_type=entity_type, entity_id=entity_id, performed_by=performed_by)
     return {"total": total, "offset": offset, "limit": limit, "logs": logs}
 
 
-# ── Export ──────────────────────────────────────────────
+@app.get("/reports/stock-pdf")
+def stock_pdf(db: Session = Depends(get_db), user=Depends(require_user)):
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from matplotlib.backends.backend_pdf import PdfPages
+    except ImportError as exc:
+        raise HTTPException(status_code=503, detail="PDF-Export ist auf diesem System nicht verfügbar") from exc
+
+    rows = (
+        db.query(Warehouse.code, func.coalesce(func.sum(StockItem.on_hand), 0))
+        .join(StockItem, StockItem.warehouse_id == Warehouse.id)
+        .group_by(Warehouse.code)
+        .order_by(Warehouse.code.asc())
+        .all()
+    )
+    labels = [row[0] for row in rows] or ["Keine Daten"]
+    values = [int(row[1]) for row in rows] or [0]
+    buffer = io.BytesIO()
+    with PdfPages(buffer) as pdf:
+        fig, ax = plt.subplots(figsize=(8, 4.8))
+        ax.bar(labels, values, color=["#2563eb", "#0f766e", "#ea580c"][: len(labels)])
+        ax.set_title(f"Bestand je Lagerort ({datetime.now().strftime('%d.%m.%Y %H:%M')})")
+        ax.set_ylabel("Stück")
+        ax.set_xlabel("Lagerort")
+        ax.grid(axis="y", linestyle="--", alpha=0.3)
+        pdf.savefig(fig, bbox_inches="tight")
+        plt.close(fig)
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="stock-report.pdf"'},
+    )
 
 
-@app.get("/export/books")
-def export_books(db: Session = Depends(get_db)):
-    """Export all books as CSV."""
-    import csv
-    import io
-
-    all_books = books.get_all_books(db)
+@app.get("/export/catalog-products")
+def export_catalog_products(db: Session = Depends(get_db), user=Depends(require_user)):
+    rows = _service(db).list_catalog_products(include_inactive=True)
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(
-        [
-            "ID",
-            "Name",
-            "Author",
-            "Description",
-            "Purchase Price",
-            "Selling Price",
-            "Quantity",
-            "SKU",
-            "Category",
-            "Supplier ID",
-            "Created At",
-            "Updated At",
-            "Notes",
-        ]
-    )
-    for b in all_books:
-        writer.writerow(
-            [
-                b.id,
-                b.name,
-                b.author,
-                b.description,
-                b.purchase_price,
-                b.sell_price,
-                b.quantity,
-                b.sku,
-                b.category,
-                b.supplier_id,
-                b.created_at,
-                b.updated_at,
-                b.notes or "",
-            ]
-        )
-    output.seek(0)
-
+    writer.writerow(["Product ID", "SKU", "Title", "Author", "Category", "Selling Price", "Reorder Point", "Active"])
+    for row in rows:
+        writer.writerow([row.id, row.sku, row.title, row.author, row.category, row.selling_price, row.reorder_point, row.is_active])
     return StreamingResponse(
-        io.BytesIO(output.getvalue().encode("utf-8")),
+        iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": 'attachment; filename="books.csv"'},
+        headers={"Content-Disposition": 'attachment; filename="catalog-products.csv"'},
     )
 
 
-@app.get("/export/movements")
-def export_movements(db: Session = Depends(get_db)):
-    """Export all movements as CSV."""
-    import csv
-    import io
-
-    all_movements = inventory.get_all_movements(db)
+@app.get("/export/stock-ledger")
+def export_stock_ledger(db: Session = Depends(get_db), user=Depends(require_user)):
+    rows = _service(db).list_stock_ledger(limit=1000)
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(
-        [
-            "ID",
-            "Book ID",
-            "Book Name",
-            "Quantity Change",
-            "Movement Type",
-            "Reason",
-            "Timestamp",
-            "Performed By",
-        ]
-    )
-    for m in all_movements:
-        writer.writerow(
-            [
-                m.id,
-                m.book_id,
-                m.book_name,
-                m.quantity_change,
-                m.movement_type,
-                m.reason or "",
-                m.timestamp,
-                m.performed_by,
-            ]
-        )
-    output.seek(0)
-
+    writer.writerow(["Entry ID", "Product ID", "SKU", "Title", "Warehouse", "Delta", "Movement Type", "Reference Type", "Reference ID", "Reason", "Performed By", "Created At"])
+    for row in rows:
+        writer.writerow([row.id, row.product_id, row.sku, row.title, row.warehouse_code, row.quantity_delta, row.movement_type, row.reference_type, row.reference_id, row.reason, row.performed_by, row.created_at])
     return StreamingResponse(
-        io.BytesIO(output.getvalue().encode("utf-8")),
+        iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": 'attachment; filename="movements.csv"'},
+        headers={"Content-Disposition": 'attachment; filename="stock-ledger.csv"'},
     )
 
 
 @app.get("/export/purchase-orders")
-def export_purchase_orders(db: Session = Depends(get_db)):
-    """Export all purchase orders as CSV."""
-    import csv
-    import io
-
-    all_orders = suppliers.get_all_purchase_orders(db)
+def export_purchase_orders(db: Session = Depends(get_db), user=Depends(require_user)):
+    rows = _service(db).list_purchase_orders()
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(
-        [
-            "ID",
-            "Supplier ID",
-            "Supplier Name",
-            "Book ID",
-            "Book Name",
-            "Book SKU",
-            "Unit Price",
-            "Quantity",
-            "Delivered Quantity",
-            "Status",
-            "Created At",
-            "Delivered At",
-        ]
-    )
-    for o in all_orders:
-        writer.writerow(
-            [
-                o.id,
-                o.supplier_id,
-                o.supplier_name,
-                o.book_id,
-                o.book_name,
-                o.book_sku or "",
-                o.unit_price,
-                o.quantity,
-                o.delivered_quantity,
-                o.status,
-                o.created_at,
-                o.delivered_at or "",
-            ]
-        )
-    output.seek(0)
-
+    writer.writerow(["Order ID", "Order Number", "Supplier ID", "Supplier Name", "Status", "Ordered At", "Received At", "Line ID", "Product ID", "Product Title", "Quantity", "Received Quantity", "Unit Cost"])
+    for order in rows:
+        for line in order.lines:
+            writer.writerow([
+                order.id,
+                order.order_number,
+                order.supplier_id,
+                order.supplier_name,
+                order.status,
+                order.ordered_at,
+                order.received_at or "",
+                line.line_id,
+                line.product_id,
+                line.product_title,
+                line.quantity,
+                line.received_quantity,
+                line.unit_cost,
+            ])
     return StreamingResponse(
-        io.BytesIO(output.getvalue().encode("utf-8")),
+        iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": 'attachment; filename="purchase_orders.csv"'},
+        headers={"Content-Disposition": 'attachment; filename="purchase-orders.csv"'},
     )

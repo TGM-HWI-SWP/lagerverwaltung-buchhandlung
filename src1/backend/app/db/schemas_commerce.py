@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.core.time import normalize_optional_timestamp
+
 
 class CatalogProductSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -13,6 +15,15 @@ class CatalogProductSchema(BaseModel):
     description: str = ""
     category: str = ""
     is_active: bool = True
+    selling_price: float = 0
+    reorder_point: int = 0
+    created_at: str | None = None
+    updated_at: str | None = None
+
+    @field_validator("created_at", "updated_at", mode="before")
+    @classmethod
+    def normalize_timestamp_fields(cls, value: str | None) -> str | None:
+        return normalize_optional_timestamp(value)
 
 
 class CatalogProductCreateRequest(BaseModel):
@@ -36,7 +47,43 @@ class CatalogProductUpdateRequest(BaseModel):
     description: str | None = None
     category: str | None = None
     is_active: bool | None = None
+    selling_price: float | None = Field(default=None, ge=0)
     reorder_point: int | None = Field(default=None, ge=0)
+
+
+class WarehouseSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    code: str
+    name: str
+    is_active: bool = True
+    created_at: str | None = None
+
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def normalize_created_at(cls, value: str | None) -> str | None:
+        return normalize_optional_timestamp(value)
+
+
+class WarehouseCreateRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=32)
+    name: str = Field(min_length=1, max_length=120)
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def normalize_code(cls, value: str | None) -> str:
+        return (value or "").strip().upper()
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value: str | None) -> str:
+        return (value or "").strip()
+
+
+class WarehouseUpdateRequest(BaseModel):
+    name: str | None = None
+    is_active: bool | None = None
 
 
 class StockEntrySchema(BaseModel):
@@ -47,6 +94,7 @@ class StockEntrySchema(BaseModel):
     on_hand: int
     reserved: int
     reorder_point: int
+    selling_price: float
 
 
 class StockAdjustmentRequest(BaseModel):
@@ -62,6 +110,50 @@ class StockAdjustmentRequest(BaseModel):
         if not normalized:
             raise ValueError("Pflichtfeld darf nicht leer sein")
         return normalized
+
+    @field_validator("warehouse_code")
+    @classmethod
+    def normalize_warehouse_code(cls, value: str) -> str:
+        return value.upper()
+
+
+class StockLedgerEntrySchema(BaseModel):
+    id: str
+    product_id: str
+    sku: str
+    title: str
+    warehouse_code: str
+    quantity_delta: int
+    movement_type: str
+    reference_type: str
+    reference_id: str
+    reason: str
+    performed_by: str
+    created_at: str
+
+
+class ProductSupplierSchema(BaseModel):
+    supplier_id: str
+    supplier_name: str
+    supplier_sku: str = ""
+    is_primary: bool = False
+    last_purchase_price: float = 0
+
+
+class ProductSupplierLinkRequest(BaseModel):
+    supplier_id: str
+    supplier_sku: str = ""
+    is_primary: bool = False
+    last_purchase_price: float = Field(default=0, ge=0)
+
+    @field_validator("supplier_id", "supplier_sku", mode="before")
+    @classmethod
+    def normalize_supplier_fields(cls, value: str | None) -> str:
+        return (value or "").strip()
+
+
+class ProductSupplierUpsertRequest(BaseModel):
+    links: list[ProductSupplierLinkRequest]
 
 
 class DiscountRuleSchema(BaseModel):
@@ -92,6 +184,7 @@ class SaleLineRequest(BaseModel):
 
 
 class SaleCreateRequest(BaseModel):
+    warehouse_code: str = "STORE"
     lines: list[SaleLineRequest]
     customer_reference: str = ""
     is_first_customer: bool = False
@@ -99,6 +192,7 @@ class SaleCreateRequest(BaseModel):
 
 
 class SaleLineResponse(BaseModel):
+    line_id: str
     product_id: str
     product_name: str
     quantity: int
@@ -115,6 +209,9 @@ class AppliedDiscountResponse(BaseModel):
 class SaleOrderResponse(BaseModel):
     order_id: str
     order_number: str
+    warehouse_code: str
+    status: str
+    created_at: str
     subtotal: float
     discount_total: float
     total: float
@@ -152,18 +249,32 @@ class PurchaseOrderCreateRequest(BaseModel):
     lines: list[PurchaseOrderLineCreateRequest]
 
 
-class PurchaseOrderReceiveLineRequest(BaseModel):
+class PurchaseOrderLineReceiveRequest(BaseModel):
     line_id: str
     receive_quantity: int = Field(gt=0)
 
 
 class PurchaseOrderReceiveRequest(BaseModel):
     warehouse_code: str = "STORE"
-    lines: list[PurchaseOrderReceiveLineRequest]
+    lines: list[PurchaseOrderLineReceiveRequest]
+
+
+class PurchaseOrderLineResponse(BaseModel):
+    line_id: str
+    product_id: str
+    product_title: str
+    quantity: int
+    received_quantity: int
+    remaining_quantity: int
+    unit_cost: float
 
 
 class PurchaseOrderResponse(BaseModel):
     id: str
     order_number: str
     supplier_id: str
+    supplier_name: str
     status: str
+    ordered_at: str
+    received_at: str | None = None
+    lines: list[PurchaseOrderLineResponse]

@@ -18,9 +18,7 @@ from app.db.models import Base
 
 class CatalogProduct(Base):
     __tablename__ = "catalog_products"
-    __table_args__ = (
-        UniqueConstraint("sku", name="uq_catalog_products_sku"),
-    )
+    __table_args__ = (UniqueConstraint("sku", name="uq_catalog_products_sku"),)
 
     id = Column(String, primary_key=True)
     sku = Column(String, nullable=False)
@@ -98,6 +96,23 @@ class StockLedgerEntry(Base):
     created_at = Column(DateTime, nullable=False)
 
 
+class ProductSupplier(Base):
+    __tablename__ = "product_suppliers"
+    __table_args__ = (
+        UniqueConstraint("product_id", "supplier_id", name="uq_product_suppliers_product_supplier"),
+        CheckConstraint("last_purchase_price >= 0", name="ck_product_suppliers_last_price_non_negative"),
+    )
+
+    id = Column(String, primary_key=True)
+    product_id = Column(String, ForeignKey("catalog_products.id"), nullable=False)
+    supplier_id = Column(String, ForeignKey("suppliers.id"), nullable=False)
+    supplier_sku = Column(String, nullable=False, default="")
+    is_primary = Column(Boolean, nullable=False, default=False)
+    last_purchase_price = Column(Numeric(10, 2), nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False)
+    updated_at = Column(DateTime, nullable=False)
+
+
 class DiscountRule(Base):
     __tablename__ = "discount_rules"
     __table_args__ = (
@@ -133,6 +148,7 @@ class SalesOrder(Base):
     order_number = Column(String, nullable=False)
     cashier_user_id = Column(String, ForeignKey("staff_users.id"), nullable=False)
     customer_reference = Column(String, nullable=False, default="")
+    warehouse_code = Column(String, nullable=False, default="STORE")
     is_first_customer = Column(Boolean, nullable=False, default=False)
     subtotal = Column(Numeric(10, 2), nullable=False, default=0)
     discount_total = Column(Numeric(10, 2), nullable=False, default=0)
@@ -162,9 +178,7 @@ class SalesOrderLine(Base):
 
 class SalesOrderDiscount(Base):
     __tablename__ = "sales_order_discounts"
-    __table_args__ = (
-        CheckConstraint("amount >= 0", name="ck_sales_order_discounts_amount_non_negative"),
-    )
+    __table_args__ = (CheckConstraint("amount >= 0", name="ck_sales_order_discounts_amount_non_negative"),)
 
     id = Column(String, primary_key=True)
     sales_order_id = Column(String, ForeignKey("sales_orders.id"), nullable=False)
@@ -211,6 +225,7 @@ class PurchaseOrderV2(Base):
     __tablename__ = "purchase_orders_v2"
     __table_args__ = (
         UniqueConstraint("order_number", name="uq_purchase_orders_v2_number"),
+        CheckConstraint("status IN ('ORDERED', 'PARTIAL_RECEIVED', 'RECEIVED')", name="ck_purchase_orders_v2_status"),
     )
 
     id = Column(String, primary_key=True)

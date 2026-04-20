@@ -33,134 +33,105 @@ class SqliteSchemaTest(unittest.TestCase):
         }
 
         self.assertTrue(
-            {"books", "movements", "suppliers", "book_suppliers", "purchase_orders", "incoming_deliveries"}.issubset(
-                tables
-            )
+            {
+                "catalog_products",
+                "warehouses",
+                "stock_items",
+                "stock_ledger_entries",
+                "product_suppliers",
+                "purchase_orders_v2",
+                "sales_orders",
+            }.issubset(tables)
         )
 
-        book_columns = {
-            row[1] for row in self.conn.execute("PRAGMA table_info(books)").fetchall()
-        }
-        self.assertIn("author", book_columns)
-
         counts = {
-            "books": self.conn.execute("SELECT COUNT(*) FROM books").fetchone()[0],
-            "movements": self.conn.execute("SELECT COUNT(*) FROM movements").fetchone()[0],
-            "suppliers": self.conn.execute("SELECT COUNT(*) FROM suppliers").fetchone()[0],
-            "book_suppliers": self.conn.execute("SELECT COUNT(*) FROM book_suppliers").fetchone()[0],
+            "catalog_products": self.conn.execute("SELECT COUNT(*) FROM catalog_products").fetchone()[0],
+            "warehouses": self.conn.execute("SELECT COUNT(*) FROM warehouses").fetchone()[0],
+            "stock_items": self.conn.execute("SELECT COUNT(*) FROM stock_items").fetchone()[0],
+            "product_suppliers": self.conn.execute("SELECT COUNT(*) FROM product_suppliers").fetchone()[0],
         }
-        self.assertEqual(counts, {"books": 10, "movements": 10, "suppliers": 2, "book_suppliers": 13})
+        self.assertEqual(counts, {"catalog_products": 6, "warehouses": 3, "stock_items": 10, "product_suppliers": 7})
 
-        second_supplier_link = self.conn.execute(
-            """
-            SELECT supplier_id, is_primary, last_purchase_price
-            FROM book_suppliers
-            WHERE book_id = 'B001'
-            ORDER BY supplier_id
-            """
-        ).fetchall()
-        self.assertEqual(second_supplier_link, [("S001", 1, 20.99), ("S002", 0, 21.49)])
-
-    def test_purchase_flow_tables_accept_persistent_rows(self) -> None:
+    def test_purchase_flow_tables_accept_multi_line_rows(self) -> None:
         execute_sql_file(self.conn)
 
         self.conn.execute(
             """
-            INSERT INTO purchase_orders (
-                id, supplier_id, supplier_name, book_id, book_name, book_sku,
-                unit_price, quantity, delivered_quantity, status, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO purchase_orders_v2 (
+                id, order_number, supplier_id, created_by_user_id, status, notes, ordered_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                "PO-001",
+                "PO2-EXTRA",
+                "PO2-20260421-EXTRA",
                 "S001",
-                "Buchgrosshandel Wien GmbH",
-                "B001",
-                "Der Herr der Ringe",
-                "ISBN-978-3-608-93981-2",
-                20.99,
-                5,
-                2,
-                "teilgeliefert",
-                "2026-04-18T12:00:00+00:00",
+                "U-DEMO002",
+                "ORDERED",
+                "Testbestellung",
+                "2026-04-21T09:00:00+00:00",
             ),
         )
         self.conn.execute(
             """
-            INSERT INTO incoming_deliveries (
-                id, order_id, supplier_id, supplier_name, book_id, book_name,
-                quantity, unit_price, received_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO purchase_order_v2_lines (
+                id, purchase_order_id, product_id, quantity, received_quantity, unit_cost
+            ) VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (
-                "IN-001",
-                "PO-001",
-                "S001",
-                "Buchgrosshandel Wien GmbH",
-                "B001",
-                "Der Herr der Ringe",
-                2,
-                20.99,
-                "2026-04-18T13:00:00+00:00",
-            ),
+            ("POL-EXTRA-1", "PO2-EXTRA", "CP001", 4, 1, 20.99),
         )
         self.conn.commit()
 
         order_row = self.conn.execute(
-            "SELECT status, delivered_quantity FROM purchase_orders WHERE id = 'PO-001'"
+            "SELECT status FROM purchase_orders_v2 WHERE id = 'PO2-EXTRA'"
         ).fetchone()
-        delivery_row = self.conn.execute(
-            "SELECT quantity, unit_price FROM incoming_deliveries WHERE id = 'IN-001'"
+        line_row = self.conn.execute(
+            "SELECT quantity, received_quantity FROM purchase_order_v2_lines WHERE id = 'POL-EXTRA-1'"
         ).fetchone()
 
-        self.assertEqual(order_row, ("teilgeliefert", 2))
-        self.assertEqual(delivery_row, (2, 20.99))
+        self.assertEqual(order_row, ("ORDERED",))
+        self.assertEqual(line_row, (4, 1))
 
-    def test_constraints_block_invalid_prices_and_duplicate_supplier_links(self) -> None:
+    def test_constraints_block_invalid_price_and_duplicate_product_supplier_link(self) -> None:
         execute_sql_file(self.conn)
 
         with self.assertRaises(sqlite3.IntegrityError):
             self.conn.execute(
                 """
-                INSERT INTO books (
-                    id, name, author, description, purchase_price, sell_price, quantity,
-                    sku, category, supplier_id, created_at, updated_at, notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO product_prices (
+                    id, product_id, price_type, amount, currency, valid_from, valid_to, priority, is_active, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    "B999",
-                    "Fehlerbuch",
-                    "",
-                    "Test",
+                    "PR-BAD",
+                    "CP001",
+                    "standard",
                     -1,
-                    10,
-                    1,
-                    "ERR-001",
-                    "Test",
-                    "S001",
-                    "2026-04-18T12:00:00+00:00",
-                    "2026-04-18T12:00:00+00:00",
+                    "EUR",
                     None,
+                    None,
+                    0,
+                    1,
+                    "2026-04-21T09:00:00+00:00",
                 ),
             )
 
         with self.assertRaises(sqlite3.IntegrityError):
             self.conn.execute(
                 """
-                INSERT INTO book_suppliers (
-                    id, book_id, supplier_id, supplier_sku, is_primary,
+                INSERT INTO product_suppliers (
+                    id, product_id, supplier_id, supplier_sku, is_primary,
                     last_purchase_price, created_at, updated_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    "BS999",
-                    "B001",
+                    "PS-dup",
+                    "CP001",
                     "S001",
                     "DUP",
                     0,
                     20.99,
-                    "2026-04-18T12:00:00+00:00",
-                    "2026-04-18T12:00:00+00:00",
+                    "2026-04-21T09:00:00+00:00",
+                    "2026-04-21T09:00:00+00:00",
                 ),
             )
 
