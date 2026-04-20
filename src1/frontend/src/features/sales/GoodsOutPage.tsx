@@ -32,9 +32,12 @@ export function GoodsOutPage({
 }: GoodsOutPageProps) {
   const [warehouseCode, setWarehouseCode] = useState("STORE");
   const [productId, setProductId] = useState("");
+  const [productSearch, setProductSearch] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [customDiscountAmount, setCustomDiscountAmount] = useState("0");
+  const [customDiscountType, setCustomDiscountType] = useState<"FIXED" | "PERCENT">("FIXED");
   const [isFirstCustomer, setIsFirstCustomer] = useState(false);
+  const [salesTab, setSalesTab] = useState<"sale" | "returns" | "history">("sale");
   const [returnOrderId, setReturnOrderId] = useState("");
   const [returnLineId, setReturnLineId] = useState("");
   const [returnQuantity, setReturnQuantity] = useState("1");
@@ -49,6 +52,9 @@ export function GoodsOutPage({
   const posCard = dark
     ? "rounded-[2rem] border border-cyan-500/10 bg-gray-900/75 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
     : "rounded-[2rem] border border-cyan-100 bg-white shadow-sm";
+  const smallButtonClass = dark
+    ? "rounded-2xl border border-gray-800 bg-gray-950/70 px-4 py-3 text-sm font-medium text-gray-200 transition hover:border-cyan-500/40 hover:text-white"
+    : "rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 transition hover:border-cyan-400 hover:text-gray-900";
   const keypadButtonClass = dark
     ? "rounded-2xl border border-gray-800 bg-gray-950/80 px-4 py-5 text-center text-2xl font-semibold text-white transition hover:border-cyan-500/50 hover:bg-gray-900"
     : "rounded-2xl border border-gray-300 bg-white px-4 py-5 text-center text-2xl font-semibold text-gray-900 transition hover:border-cyan-400 hover:bg-cyan-50";
@@ -57,13 +63,22 @@ export function GoodsOutPage({
     () => currentStock.filter((entry) => entry.onHand > 0).sort((a, b) => a.title.localeCompare(b.title)),
     [currentStock],
   );
+  const filteredProducts = useMemo(() => {
+    const query = productSearch.trim().toLowerCase();
+    if (!query) return selectableProducts;
+    return selectableProducts.filter((entry) =>
+      [entry.title, entry.sku, entry.warehouseCode].some((value) => value.toLowerCase().includes(query))
+    );
+  }, [productSearch, selectableProducts]);
   const selectedStock = selectableProducts.find((entry) => entry.productId === productId) ?? null;
   const selectedProduct = products.find((entry) => entry.id === productId) ?? null;
   const selectedQuantity = Math.max(1, Number(quantity) || 1);
   const returnSelectedQuantity = Math.max(1, Number(returnQuantity) || 1);
   const selectedLine = salesOrders.find((order) => order.orderId === returnOrderId)?.lines.find((line) => line.lineId === returnLineId) ?? null;
   const selectedTotal = selectedStock ? selectedStock.sellingPrice * selectedQuantity : 0;
-  const productGrid = selectableProducts.slice(0, posMode ? 24 : 12);
+  const productGrid = filteredProducts.slice(0, posMode ? 32 : 12);
+  const currentOrder = salesOrders.find((order) => order.orderId === returnOrderId) ?? null;
+  const totalAvailable = selectableProducts.reduce((sum, entry) => sum + entry.onHand, 0);
 
   const createSale = async () => {
     if (!selectedStock || !selectedProduct) {
@@ -78,9 +93,11 @@ export function GoodsOutPage({
         lines: [{ product_id: selectedProduct.id, quantity: Math.max(1, Number(quantity) || 1) }],
         is_first_customer: isFirstCustomer,
         custom_discount_amount: Math.max(0, Number(customDiscountAmount) || 0),
+        custom_discount_type: customDiscountType,
       });
       setQuantity("1");
       setCustomDiscountAmount("0");
+      setCustomDiscountType("FIXED");
       setIsFirstCustomer(false);
       await Promise.all([reloadStockEntries(), reloadLedgerEntries(), reloadSalesOrders()]);
       setStatusMessage("Verkauf wurde gebucht.");
@@ -169,7 +186,7 @@ export function GoodsOutPage({
       <button
         type="button"
         onClick={() => setProductId(entry.productId)}
-        className={`rounded-[1.4rem] border p-4 text-left transition ${
+        className={`min-h-[170px] rounded-[1.6rem] border p-5 text-left transition ${
           active
             ? dark
               ? "border-cyan-400 bg-cyan-500/10 text-white"
@@ -179,17 +196,26 @@ export function GoodsOutPage({
               : "border-gray-200 bg-white text-gray-900 hover:border-cyan-300"
         }`}
       >
-        <div className="line-clamp-2 min-h-[3rem] text-base font-semibold leading-6">{entry.title}</div>
+        <div className={`inline-flex rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${dark ? "bg-gray-900 text-gray-400" : "bg-gray-100 text-gray-500"}`}>
+          {entry.sku}
+        </div>
+        <div className="mt-4 line-clamp-3 min-h-[4.5rem] text-lg font-semibold leading-7">{entry.title}</div>
         <div className={`mt-3 flex items-end justify-between gap-3 ${mutedText}`}>
-          <div className="text-xs uppercase tracking-[0.18em]">{entry.onHand} Stk.</div>
-          <div className="text-lg font-semibold text-cyan-400">€{entry.sellingPrice.toFixed(2)}</div>
+          <div>
+            <div className="text-xs uppercase tracking-[0.18em]">Bestand</div>
+            <div className="mt-1 text-base font-semibold">{entry.onHand} Stk.</div>
+          </div>
+          <div className="text-right">
+            <div className="text-xs uppercase tracking-[0.18em]">Preis</div>
+            <div className="mt-1 text-xl font-semibold text-cyan-400">€{entry.sellingPrice.toFixed(2)}</div>
+          </div>
         </div>
       </button>
     );
   };
 
   return (
-    <div className={`grid gap-6 ${posMode ? "2xl:grid-cols-[420px_minmax(0,1fr)]" : "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"}`}>
+    <div className={`grid gap-6 ${posMode ? "2xl:grid-cols-[400px_minmax(0,1fr)]" : "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"}`}>
       <Card className={posMode ? posCard : card}>
         <CardContent className={`${posMode ? "p-7" : "p-6"}`}>
           <div className="flex items-start justify-between gap-4">
@@ -214,19 +240,49 @@ export function GoodsOutPage({
               ))}
             </select>
 
-            <div className={`rounded-[1.6rem] border p-5 ${dark ? "border-gray-800 bg-gray-950/70" : "border-gray-200 bg-gray-50"}`}>
-              <div className={`text-xs uppercase tracking-[0.18em] ${mutedText}`}>Aktueller Artikel</div>
-              <div className="mt-3 text-2xl font-semibold">{selectedStock?.title || "Noch kein Produkt ausgewählt"}</div>
-              <div className={`mt-3 flex flex-wrap gap-3 text-sm ${mutedText}`}>
-                <span>Bestand: {selectedStock?.onHand ?? 0} Stk.</span>
-                <span>Einzelpreis: €{selectedStock?.sellingPrice.toFixed(2) ?? "0.00"}</span>
-                <span>Menge: {selectedQuantity}</span>
+              <div className={`rounded-[1.6rem] border p-5 ${dark ? "border-gray-800 bg-gray-950/70" : "border-gray-200 bg-gray-50"}`}>
+                <div className={`text-xs uppercase tracking-[0.18em] ${mutedText}`}>Aktueller Artikel</div>
+                <div className="mt-3 text-2xl font-semibold">{selectedStock?.title || "Noch kein Produkt ausgewählt"}</div>
+                <div className={`mt-3 flex flex-wrap gap-3 text-sm ${mutedText}`}>
+                  <span>Bestand: {selectedStock?.onHand ?? 0} Stk.</span>
+                  <span>Einzelpreis: €{selectedStock?.sellingPrice.toFixed(2) ?? "0.00"}</span>
+                  <span>Menge: {selectedQuantity}</span>
+                </div>
               </div>
-            </div>
 
-            <div className="grid gap-4">
-              <QuantityKeypad value={quantity} onChange={setQuantity} label="Menge" />
-              <input className={`${inputClass} ${posMode ? "h-14 text-base" : ""}`} inputMode="decimal" placeholder="Rabatt in Euro" value={customDiscountAmount} onChange={(e) => setCustomDiscountAmount(e.target.value)} />
+              <div className="grid gap-4">
+                <QuantityKeypad value={quantity} onChange={setQuantity} label="Menge" />
+              <div className={`rounded-[1.6rem] border p-4 ${dark ? "border-gray-800 bg-gray-950/70" : "border-gray-200 bg-gray-50"}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className={`text-xs uppercase tracking-[0.18em] ${mutedText}`}>Eigener Rabatt</div>
+                    <div className={`mt-1 text-sm ${mutedText}`}>Wahlweise direkt in Euro oder in Prozent vom aktuellen Verkauf.</div>
+                  </div>
+                  <div className="inline-flex rounded-2xl border p-1">
+                    <button
+                      type="button"
+                      className={`rounded-xl px-4 py-2 text-sm font-medium transition ${customDiscountType === "FIXED" ? "bg-cyan-500 text-slate-950" : mutedText}`}
+                      onClick={() => setCustomDiscountType("FIXED")}
+                    >
+                      Rabatt €
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded-xl px-4 py-2 text-sm font-medium transition ${customDiscountType === "PERCENT" ? "bg-cyan-500 text-slate-950" : mutedText}`}
+                      onClick={() => setCustomDiscountType("PERCENT")}
+                    >
+                      Rabatt %
+                    </button>
+                  </div>
+                </div>
+                <input
+                  className={`${inputClass} ${posMode ? "mt-4 h-14 text-base" : "mt-4"}`}
+                  inputMode="decimal"
+                  placeholder={customDiscountType === "PERCENT" ? "z. B. 10 für 10 %" : "z. B. 2.50 für 2,50 €"}
+                  value={customDiscountAmount}
+                  onChange={(e) => setCustomDiscountAmount(e.target.value)}
+                />
+              </div>
               <label className={`flex items-center gap-3 rounded-2xl border px-4 py-4 text-sm ${dark ? "border-gray-800 bg-gray-950/70 text-gray-200" : "border-gray-200 bg-gray-50 text-gray-700"}`}>
                 <input type="checkbox" checked={isFirstCustomer} onChange={(e) => setIsFirstCustomer(e.target.checked)} />
                 Erstkunde-Rabatt zusätzlich berücksichtigen
@@ -245,88 +301,182 @@ export function GoodsOutPage({
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h2 className={`${posMode ? "text-2xl" : "text-xl"} font-semibold`}>Artikelwahl</h2>
-                <p className={`mt-1 text-sm ${mutedText}`}>Tippe einen Artikel an, um ihn links direkt zu verkaufen.</p>
+                <p className={`mt-1 text-sm ${mutedText}`}>Tippe einen Artikel an, um ihn links direkt zu verkaufen. Retoure und Verlauf liegen separat, damit hier mehr Platz für Produkte bleibt.</p>
               </div>
               <div className={`rounded-full px-4 py-2 text-sm ${dark ? "bg-gray-950 text-gray-300" : "bg-gray-50 text-gray-600"}`}>
-                {warehouseCode} · {productGrid.length} verfügbar
+                {warehouseCode} · {selectableProducts.length} Artikel · {totalAvailable} Stk.
               </div>
             </div>
-            <div className={`mt-6 grid gap-4 ${posMode ? "sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" : "md:grid-cols-2 xl:grid-cols-3"}`}>
-              {productGrid.map((entry) => (
-                <ProductTile key={entry.productId} entry={entry} />
-              ))}
+            <div className={`mt-5 grid gap-3 ${posMode ? "xl:grid-cols-[minmax(0,1fr)_220px]" : ""}`}>
+              <input
+                className={`${inputClass} ${posMode ? "h-16 text-base" : ""}`}
+                placeholder="Produkte nach Titel oder SKU suchen"
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+              />
+              <button type="button" className={smallButtonClass} onClick={() => setProductSearch("")}>
+                Suche leeren
+              </button>
             </div>
+            {productGrid.length ? (
+              <div className={`mt-6 grid gap-4 ${posMode ? "sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" : "md:grid-cols-2 xl:grid-cols-3"}`}>
+                {productGrid.map((entry) => (
+                  <ProductTile key={entry.productId} entry={entry} />
+                ))}
+              </div>
+            ) : (
+              <div className={`mt-6 rounded-[1.6rem] border p-6 text-sm ${dark ? "border-gray-800 bg-gray-950/70 text-gray-300" : "border-gray-200 bg-gray-50 text-gray-600"}`}>
+                Keine Produkte für diese Suche gefunden.
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        <div className={`grid gap-6 ${posMode ? "xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,420px)]" : "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"}`}>
-          <Card className={posMode ? posCard : card}>
-            <CardContent className={`${posMode ? "p-7" : "p-6"}`}>
-              <h2 className={`${posMode ? "text-2xl" : "text-xl"} font-semibold`}>Retoure</h2>
-              <p className={`mt-1 text-sm ${mutedText}`}>Wähle einen bisherigen Verkauf und buche die Rücknahme direkt über Touch-Menge.</p>
-              <div className="mt-5 space-y-4">
-                <select className={`${inputClass} ${posMode ? "h-16 text-base" : ""}`} value={returnOrderId} onChange={(e) => { setReturnOrderId(e.target.value); setReturnLineId(""); }}>
-                  <option value="">Verkaufsauftrag wählen</option>
-                  {salesOrders.map((order) => (
-                    <option key={order.orderId} value={order.orderId}>
-                      {order.orderNumber} · {order.warehouseCode} · €{order.total.toFixed(2)}
-                    </option>
-                  ))}
-                </select>
-                <select className={`${inputClass} ${posMode ? "h-16 text-base" : ""}`} value={returnLineId} onChange={(e) => setReturnLineId(e.target.value)}>
-                  <option value="">Verkaufszeile wählen</option>
-                  {(salesOrders.find((order) => order.orderId === returnOrderId)?.lines ?? []).map((line) => (
-                    <option key={line.lineId} value={line.lineId}>
-                      {line.productName} · {line.quantity} Stk.
-                    </option>
-                  ))}
-                </select>
-                <div className={`rounded-[1.6rem] border p-5 ${dark ? "border-gray-800 bg-gray-950/70" : "border-gray-200 bg-gray-50"}`}>
-                  <div className={`text-xs uppercase tracking-[0.18em] ${mutedText}`}>Retoure-Artikel</div>
-                  <div className="mt-3 text-xl font-semibold">{selectedLine?.productName || "Noch keine Verkaufszeile ausgewählt"}</div>
-                  <div className={`mt-2 text-sm ${mutedText}`}>Menge: {returnSelectedQuantity} · Grund: {returnReason}</div>
-                </div>
-                <input className={`${inputClass} ${posMode ? "h-14 text-base" : ""}`} placeholder="Retourgrund" value={returnReason} onChange={(e) => setReturnReason(e.target.value)} />
-                <Button variant="outline" className={`${posMode ? "h-16 text-lg font-semibold" : ""}`} onClick={createReturn} disabled={busy || !returnOrderId || !returnLineId}>
-                  {busy ? "Retoure wird gebucht..." : "Retoure jetzt buchen"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className={posMode ? posCard : card}>
-            <CardContent className={`${posMode ? "p-7" : "p-6"}`}>
-              <h3 className={`${posMode ? "text-2xl" : "text-lg"} font-semibold`}>Touch-Retoure</h3>
-              <div className="mt-5">
-                <QuantityKeypad value={returnQuantity} onChange={setReturnQuantity} label="Retourmenge" />
-              </div>
-              {statusMessage ? <p className="mt-5 text-sm text-cyan-400">{statusMessage}</p> : null}
-            </CardContent>
-          </Card>
-        </div>
-
         <Card className={posMode ? posCard : card}>
           <CardContent className={`${posMode ? "p-7" : "p-6"}`}>
-            <h3 className={`${posMode ? "text-2xl" : "text-lg"} font-semibold`}>Letzte Verkäufe</h3>
-            <div className={`mt-5 grid gap-4 ${posMode ? "lg:grid-cols-2" : "md:grid-cols-2"}`}>
-              {salesOrders.slice(0, 8).map((order) => (
-                <div key={order.orderId} className={`rounded-[1.4rem] border p-4 ${dark ? "border-gray-800 bg-gray-950/70" : "border-gray-200 bg-gray-50"}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-semibold">{order.orderNumber}</div>
-                      <div className={`mt-1 text-sm ${mutedText}`}>{order.warehouseCode} · {new Date(order.createdAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</div>
-                    </div>
-                    <div className="text-lg font-semibold text-cyan-400">€{order.total.toFixed(2)}</div>
-                  </div>
-                  <div className={`mt-3 space-y-1 text-sm ${mutedText}`}>
-                    {order.lines.slice(0, 3).map((line) => (
-                      <div key={line.lineId}>{line.productName} · {line.quantity} Stk.</div>
-                    ))}
-                    {order.lines.length > 3 ? <div>+ {order.lines.length - 3} weitere Positionen</div> : null}
-                  </div>
-                </div>
-              ))}
+            <div className="flex items-center justify-between gap-4">
+              <div className="inline-flex rounded-2xl border p-1">
+                <button
+                  type="button"
+                  className={`rounded-xl px-4 py-2 text-sm font-medium transition ${salesTab === "sale" ? "bg-cyan-500 text-slate-950" : mutedText}`}
+                  onClick={() => setSalesTab("sale")}
+                >
+                  Kassenhilfe
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-xl px-4 py-2 text-sm font-medium transition ${salesTab === "returns" ? "bg-cyan-500 text-slate-950" : mutedText}`}
+                  onClick={() => setSalesTab("returns")}
+                >
+                  Retoure
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-xl px-4 py-2 text-sm font-medium transition ${salesTab === "history" ? "bg-cyan-500 text-slate-950" : mutedText}`}
+                  onClick={() => setSalesTab("history")}
+                >
+                  Letzte Verkäufe
+                </button>
+              </div>
+              {statusMessage ? <div className="text-sm text-cyan-400">{statusMessage}</div> : null}
             </div>
+
+            {salesTab === "sale" ? (
+              <div className={`mt-6 grid gap-4 ${posMode ? "lg:grid-cols-3" : "md:grid-cols-3"}`}>
+                <div className={`rounded-[1.6rem] border p-5 ${dark ? "border-gray-800 bg-gray-950/70" : "border-gray-200 bg-gray-50"}`}>
+                  <div className={`text-xs uppercase tracking-[0.18em] ${mutedText}`}>Ablauf</div>
+                  <div className="mt-3 text-lg font-semibold">1. Produkt antippen</div>
+                  <p className={`mt-2 text-sm ${mutedText}`}>Rechts einen Artikel aus der Kachelfläche wählen. Links wird er sofort in die Kasse übernommen.</p>
+                </div>
+                <div className={`rounded-[1.6rem] border p-5 ${dark ? "border-gray-800 bg-gray-950/70" : "border-gray-200 bg-gray-50"}`}>
+                  <div className={`text-xs uppercase tracking-[0.18em] ${mutedText}`}>Rabatt</div>
+                  <div className="mt-3 text-lg font-semibold">€ oder % direkt an der Kasse</div>
+                  <p className={`mt-2 text-sm ${mutedText}`}>Der eigene Rabatt sitzt links direkt unter der Menge und kann wahlweise als Euro- oder Prozentwert eingegeben werden.</p>
+                </div>
+                <div className={`rounded-[1.6rem] border p-5 ${dark ? "border-gray-800 bg-gray-950/70" : "border-gray-200 bg-gray-50"}`}>
+                  <div className={`text-xs uppercase tracking-[0.18em] ${mutedText}`}>Service</div>
+                  <div className="mt-3 text-lg font-semibold">Retoure und Historie separat</div>
+                  <p className={`mt-2 text-sm ${mutedText}`}>Damit mehr Platz für Produktkacheln bleibt, liegen Retoure und letzte Verkäufe jetzt in eigenen Tabs.</p>
+                </div>
+              </div>
+            ) : null}
+
+            {salesTab === "returns" ? (
+              <div className={`mt-6 grid gap-6 ${posMode ? "xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,420px)]" : "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"}`}>
+                <Card className={dark ? "border-gray-800 bg-gray-950/50" : "border-gray-200 bg-gray-50"}>
+                  <CardContent className="p-6">
+                    <h2 className="text-xl font-semibold">Retoure</h2>
+                    <p className={`mt-1 text-sm ${mutedText}`}>Wähle einen bisherigen Verkauf und buche die Rücknahme direkt über Touch-Menge.</p>
+                    <div className="mt-5 space-y-4">
+                      <select className={`${inputClass} ${posMode ? "h-16 text-base" : ""}`} value={returnOrderId} onChange={(e) => { setReturnOrderId(e.target.value); setReturnLineId(""); }}>
+                        <option value="">Verkaufsauftrag wählen</option>
+                        {salesOrders.map((order) => (
+                          <option key={order.orderId} value={order.orderId}>
+                            {order.orderNumber} · {order.warehouseCode} · €{order.total.toFixed(2)}
+                          </option>
+                        ))}
+                      </select>
+                      <select className={`${inputClass} ${posMode ? "h-16 text-base" : ""}`} value={returnLineId} onChange={(e) => setReturnLineId(e.target.value)}>
+                        <option value="">Verkaufszeile wählen</option>
+                        {(salesOrders.find((order) => order.orderId === returnOrderId)?.lines ?? []).map((line) => (
+                          <option key={line.lineId} value={line.lineId}>
+                            {line.productName} · {line.quantity} Stk.
+                          </option>
+                        ))}
+                      </select>
+                      <div className={`rounded-[1.6rem] border p-5 ${dark ? "border-gray-800 bg-gray-950/70" : "border-gray-200 bg-white"}`}>
+                        <div className={`text-xs uppercase tracking-[0.18em] ${mutedText}`}>Retoure-Artikel</div>
+                        <div className="mt-3 text-xl font-semibold">{selectedLine?.productName || "Noch keine Verkaufszeile ausgewählt"}</div>
+                        <div className={`mt-2 text-sm ${mutedText}`}>Menge: {returnSelectedQuantity} · Grund: {returnReason}</div>
+                      </div>
+                      <input className={`${inputClass} ${posMode ? "h-14 text-base" : ""}`} placeholder="Retourgrund" value={returnReason} onChange={(e) => setReturnReason(e.target.value)} />
+                      <Button variant="outline" className={`${posMode ? "h-16 text-lg font-semibold" : ""}`} onClick={createReturn} disabled={busy || !returnOrderId || !returnLineId}>
+                        {busy ? "Retoure wird gebucht..." : "Retoure jetzt buchen"}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className={dark ? "border-gray-800 bg-gray-950/50" : "border-gray-200 bg-gray-50"}>
+                  <CardContent className="p-6">
+                    <h3 className="text-xl font-semibold">Touch-Retoure</h3>
+                    <div className="mt-5">
+                      <QuantityKeypad value={returnQuantity} onChange={setReturnQuantity} label="Retourmenge" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : null}
+
+            {salesTab === "history" ? (
+              <div className="mt-6 space-y-4">
+                {salesOrders.length ? (
+                  salesOrders.slice(0, posMode ? 16 : 8).map((order) => (
+                    <button
+                      key={order.orderId}
+                      type="button"
+                      onClick={() => {
+                        setReturnOrderId(order.orderId);
+                        setReturnLineId(order.lines[0]?.lineId ?? "");
+                        setSalesTab("returns");
+                      }}
+                      className={`w-full rounded-[1.6rem] border p-5 text-left transition ${dark ? "border-gray-800 bg-gray-950/70 hover:border-cyan-500/40" : "border-gray-200 bg-gray-50 hover:border-cyan-300"}`}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                          <div className="text-lg font-semibold">{order.orderNumber}</div>
+                          <div className={`mt-1 text-sm ${mutedText}`}>
+                            {order.warehouseCode} · {new Date(order.createdAt).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className={`text-xs uppercase tracking-[0.18em] ${mutedText}`}>Gesamt</div>
+                          <div className="mt-1 text-2xl font-semibold text-cyan-400">€{order.total.toFixed(2)}</div>
+                        </div>
+                      </div>
+                      <div className={`mt-4 grid gap-2 ${posMode ? "lg:grid-cols-2" : ""}`}>
+                        {order.lines.map((line) => (
+                          <div key={line.lineId} className={`rounded-2xl px-4 py-3 text-sm ${dark ? "bg-gray-900 text-gray-300" : "bg-white text-gray-700"}`}>
+                            <span className="font-medium text-white dark:text-white">{line.productName}</span>
+                            <span className={`ml-2 ${mutedText}`}>{line.quantity} Stk. · €{line.total.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className={`mt-4 text-sm ${mutedText}`}>Antippen, um diesen Verkauf direkt für eine Retoure zu übernehmen.</div>
+                    </button>
+                  ))
+                ) : (
+                  <div className={`rounded-[1.6rem] border p-6 text-sm ${dark ? "border-gray-800 bg-gray-950/70 text-gray-300" : "border-gray-200 bg-gray-50 text-gray-600"}`}>
+                    Noch keine Verkäufe vorhanden.
+                  </div>
+                )}
+                {currentOrder ? (
+                  <div className={`rounded-[1.6rem] border p-5 text-sm ${dark ? "border-cyan-500/20 bg-cyan-500/5 text-gray-200" : "border-cyan-200 bg-cyan-50 text-gray-700"}`}>
+                    Für Retoure vorgemerkt: <span className="font-semibold">{currentOrder.orderNumber}</span>. Wechsle in den Tab <span className="font-semibold">Retoure</span>, um die Rücknahme fertig zu buchen.
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       </div>
