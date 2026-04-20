@@ -279,6 +279,7 @@ class SaleCreateRequest(BaseModel):
     customer_reference: str = ""
     is_first_customer: bool = False
     custom_discount_amount: float = Field(default=0, ge=0)
+    custom_discount_type: str = Field(default="FIXED", pattern="^(FIXED|PERCENT)$")
 
 
 class SaleLineResponse(BaseModel):

@@ -885,7 +885,11 @@ class CommerceService:
             if amount > 0:
                 discounts.append((rule.name, amount, rule.id))
         if payload.custom_discount_amount > 0:
-            discounts.append(("Individueller Rabatt", _money(payload.custom_discount_amount), None))
+            if payload.custom_discount_type == "PERCENT":
+                custom_amount = _money(subtotal * (Decimal(str(payload.custom_discount_amount)) / Decimal("100")))
+                discounts.append((f"Individueller Rabatt ({payload.custom_discount_amount:.2f}%)", custom_amount, None))
+            else:
+                discounts.append(("Individueller Rabatt", _money(payload.custom_discount_amount), None))
         discount_total = _money(sum((amount for _, amount, _ in discounts), Decimal("0.00"))) if discounts else Decimal("0.00")
         discount_total = min(discount_total, subtotal)
         order = SalesOrder(
