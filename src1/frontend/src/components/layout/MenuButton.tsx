@@ -1,36 +1,31 @@
-import { type ReactNode } from "react";
+import { createElement, isValidElement, type ElementType, type ReactNode } from "react";
 
 export function MenuButton({
   icon,
-  label,
-  value,
-  page,
-  setPage,
-  dark,
+  active,
+  onClick,
+  children,
 }: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  page: string;
-  setPage: (p: string) => void;
-  dark: boolean;
+  icon: ElementType<{ size?: number; className?: string }> | ReactNode;
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
 }) {
-  const active = page === value;
+  const iconNode = isValidElement(icon) ? icon : typeof icon === "function" || (typeof icon === "object" && icon !== null)
+    ? createElement(icon as ElementType<{ size?: number; className?: string }>, { size: 18, className: "shrink-0" })
+    : icon;
+
   return (
     <button
-      onClick={() => setPage(value)}
+      onClick={onClick}
       className={`flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
         active
-          ? dark
-            ? "bg-blue-900/30 text-blue-300"
-            : "bg-blue-50 text-blue-700"
-          : dark
-            ? "text-gray-300 hover:bg-gray-800"
-            : "text-gray-700 hover:bg-gray-100"
+          ? "bg-blue-900/30 text-blue-300"
+          : "text-inherit hover:bg-black/5 dark:hover:bg-white/5"
       }`}
     >
-      {icon}
-      {label}
+      {iconNode}
+      {children}
     </button>
   );
 }
