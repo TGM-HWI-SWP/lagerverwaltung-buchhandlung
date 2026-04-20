@@ -1,113 +1,147 @@
-import type { BookApi, Book, PurchaseOrderApi, PurchaseOrder, IncomingDeliveryApi, IncomingDelivery, MovementApi, SaleEntry } from "./types";
+import type {
+  AppliedDiscount,
+  AppliedDiscountApi,
+  CatalogProduct,
+  CatalogProductApi,
+  ProductSupplierLink,
+  ProductSupplierLinkApi,
+  PurchaseOrder,
+  PurchaseOrderApi,
+  PurchaseOrderLine,
+  PurchaseOrderLineApi,
+  SaleOrder,
+  SaleOrderApi,
+  SaleOrderLine,
+  SaleOrderLineApi,
+  StockEntry,
+  StockEntryApi,
+  StockLedgerEntry,
+  StockLedgerEntryApi,
+  Warehouse,
+  WarehouseApi,
+} from "./types";
 
-export function mapBookApiToBook(book: BookApi): Book {
+export function mapCatalogProductApi(product: CatalogProductApi): CatalogProduct {
   return {
-    ...book,
-    purchasePrice: book.purchase_price ?? book.purchasePrice ?? 0,
-    sellingPrice: book.sell_price ?? book.sellingPrice ?? 0,
-    supplierId: book.supplier_id ?? book.supplierId ?? "",
+    id: product.id,
+    sku: product.sku,
+    title: product.title,
+    author: product.author,
+    description: product.description,
+    category: product.category,
+    isActive: product.is_active,
+    sellingPrice: product.selling_price,
+    reorderPoint: product.reorder_point,
+    createdAt: product.created_at ?? null,
+    updatedAt: product.updated_at ?? null,
   };
 }
 
-export function mapDraftToBookPayload(
-  draft: { name: string; author: string; description: string; purchasePrice: string; sellingPrice: string; quantity: string; sku: string; category: string; supplierId: string; notes: string },
-  options?: { id?: string },
-): Record<string, string | number | null> {
+export function mapWarehouseApi(warehouse: WarehouseApi): Warehouse {
   return {
-    ...(options?.id ? { id: options.id } : {}),
-    name: draft.name.trim(),
-    author: draft.author.trim(),
-    description: draft.description.trim() || "-",
-    purchase_price: Number(draft.purchasePrice) || 0,
-    sell_price: Number(draft.sellingPrice) || 0,
-    quantity: Number(draft.quantity) || 0,
-    sku: draft.sku.trim() || `AUTO-${Date.now()}`,
-    category: draft.category.trim(),
-    supplier_id: draft.supplierId.trim(),
-    notes: draft.notes.trim() || null,
+    id: warehouse.id,
+    code: warehouse.code,
+    name: warehouse.name,
+    isActive: warehouse.is_active,
+    createdAt: warehouse.created_at ?? null,
   };
 }
 
-export function mapPurchaseOrderApiToOrder(order: PurchaseOrderApi): PurchaseOrder {
+export function mapStockEntryApi(entry: StockEntryApi): StockEntry {
+  return {
+    productId: entry.product_id,
+    sku: entry.sku,
+    title: entry.title,
+    warehouseCode: entry.warehouse_code,
+    onHand: entry.on_hand,
+    reserved: entry.reserved,
+    reorderPoint: entry.reorder_point,
+    sellingPrice: entry.selling_price,
+  };
+}
+
+export function mapStockLedgerEntryApi(entry: StockLedgerEntryApi): StockLedgerEntry {
+  return {
+    id: entry.id,
+    productId: entry.product_id,
+    sku: entry.sku,
+    title: entry.title,
+    warehouseCode: entry.warehouse_code,
+    quantityDelta: entry.quantity_delta,
+    movementType: entry.movement_type,
+    referenceType: entry.reference_type,
+    referenceId: entry.reference_id,
+    reason: entry.reason,
+    performedBy: entry.performed_by,
+    createdAt: entry.created_at,
+  };
+}
+
+export function mapProductSupplierLinkApi(link: ProductSupplierLinkApi): ProductSupplierLink {
+  return {
+    supplierId: link.supplier_id,
+    supplierName: link.supplier_name,
+    supplierSku: link.supplier_sku,
+    isPrimary: link.is_primary,
+    lastPurchasePrice: link.last_purchase_price,
+  };
+}
+
+export function mapPurchaseOrderLineApi(line: PurchaseOrderLineApi): PurchaseOrderLine {
+  return {
+    lineId: line.line_id,
+    productId: line.product_id,
+    productTitle: line.product_title,
+    quantity: line.quantity,
+    receivedQuantity: line.received_quantity,
+    remainingQuantity: line.remaining_quantity,
+    unitCost: line.unit_cost,
+  };
+}
+
+export function mapPurchaseOrderApi(order: PurchaseOrderApi): PurchaseOrder {
   return {
     id: order.id,
+    orderNumber: order.order_number,
     supplierId: order.supplier_id,
-    supplier: order.supplier_name,
-    bookId: order.book_id,
-    bookName: order.book_name,
-    bookSku: order.book_sku ?? "",
-    unitPrice: order.unit_price ?? 0,
-    quantity: order.quantity,
-    deliveredQuantity: order.delivered_quantity,
+    supplierName: order.supplier_name,
+    status: order.status,
+    orderedAt: order.ordered_at,
+    receivedAt: order.received_at ?? null,
+    lines: order.lines.map(mapPurchaseOrderLineApi),
+  };
+}
+
+export function mapSaleOrderLineApi(line: SaleOrderLineApi): SaleOrderLine {
+  return {
+    lineId: line.line_id,
+    productId: line.product_id,
+    productName: line.product_name,
+    quantity: line.quantity,
+    unitPrice: line.unit_price,
+    discount: line.discount,
+    total: line.total,
+  };
+}
+
+export function mapAppliedDiscountApi(discount: AppliedDiscountApi): AppliedDiscount {
+  return {
+    description: discount.description,
+    amount: discount.amount,
+  };
+}
+
+export function mapSaleOrderApi(order: SaleOrderApi): SaleOrder {
+  return {
+    orderId: order.order_id,
+    orderNumber: order.order_number,
+    warehouseCode: order.warehouse_code,
     status: order.status,
     createdAt: order.created_at,
-    deliveredAt: order.delivered_at ?? undefined,
+    subtotal: order.subtotal,
+    discountTotal: order.discount_total,
+    total: order.total,
+    lines: order.lines.map(mapSaleOrderLineApi),
+    discounts: order.discounts.map(mapAppliedDiscountApi),
   };
-}
-
-export function mapIncomingDeliveryApi(delivery: IncomingDeliveryApi): IncomingDelivery {
-  return {
-    id: delivery.id,
-    orderId: delivery.order_id,
-    supplierId: delivery.supplier_id,
-    supplier: delivery.supplier_name,
-    bookId: delivery.book_id,
-    bookName: delivery.book_name,
-    quantity: delivery.quantity,
-    unitPrice: delivery.unit_price,
-    receivedAt: delivery.received_at,
-  };
-}
-
-export function parseSaleEntry(movement: MovementApi): SaleEntry | null {
-  const reason = movement.reason?.trim() ?? "";
-  const parseReasonMeta = (detail: string) => {
-    const unitPriceMatch = detail.match(/\[price=([0-9]+(?:\.[0-9]+)?)\]/);
-    const discountMatch = detail.match(/\[discount=([0-9]+(?:\.[0-9]+)?)\]/);
-    const unitPrice = unitPriceMatch ? Number(unitPriceMatch[1]) : 0;
-    const discountAmount = discountMatch ? Number(discountMatch[1]) : 0;
-    const cleanReason = detail
-      .replace(/\s*\[price=[0-9]+(?:\.[0-9]+)?\]/g, "")
-      .replace(/\s*\[discount=[0-9]+(?:\.[0-9]+)?\]/g, "")
-      .trim() || "Ohne Grund";
-    return { unitPrice, discountAmount, cleanReason };
-  };
-
-  const normalizedReason = reason.replace(/^Verkauf von\s+/i, "Verkauf: ").replace(/^Retoure von\s+/i, "Retoure: ");
-
-  if (normalizedReason.startsWith("Verkauf:")) {
-    const detail = normalizedReason.slice("Verkauf:".length).trim() || "Ohne Grund";
-    const { unitPrice, discountAmount, cleanReason } = parseReasonMeta(detail);
-    const quantity = Math.abs(movement.quantity_change);
-    return {
-      id: movement.id,
-      bookId: movement.book_id,
-      bookName: movement.book_name,
-      type: "Verkauf",
-      quantity,
-      unitPrice,
-      total: unitPrice * quantity - discountAmount,
-      createdAt: movement.timestamp ?? new Date().toISOString(),
-      reason: cleanReason,
-      discountAmount,
-    };
-  }
-  if (normalizedReason.startsWith("Retoure:")) {
-    const detail = normalizedReason.slice("Retoure:".length).trim() || "Ohne Grund";
-    const { unitPrice, cleanReason } = parseReasonMeta(detail);
-    const quantity = Math.abs(movement.quantity_change);
-    return {
-      id: movement.id,
-      bookId: movement.book_id,
-      bookName: movement.book_name,
-      type: "Retoure",
-      quantity,
-      unitPrice,
-      total: -unitPrice * quantity,
-      createdAt: movement.timestamp ?? new Date().toISOString(),
-      reason: cleanReason,
-      discountAmount: 0,
-    };
-  }
-  return null;
 }

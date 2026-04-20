@@ -1,37 +1,136 @@
-// Core domain types used across the application
-// These mirror the Pydantic schemas from the FastAPI backend
-
-export type Book = {
+export type CatalogProductApi = {
   id: string;
-  name: string;
+  sku: string;
+  title: string;
   author: string;
   description: string;
-  purchasePrice: number;
-  sellingPrice: number;
-  price?: number; // for backward compatibility
-  quantity: number;
-  sku: string;
   category: string;
-  supplierId?: string;
+  is_active: boolean;
+  selling_price: number;
+  reorder_point: number;
   created_at?: string | null;
   updated_at?: string | null;
-  notes?: string | null;
 };
 
-export type NewBookDraft = {
-  name: string;
+export type CatalogProduct = {
+  id: string;
+  sku: string;
+  title: string;
   author: string;
   description: string;
-  purchasePrice: string;
-  sellingPrice: string;
-  quantity: string;
-  sku: string;
   category: string;
-  supplierId: string;
-  notes: string;
+  isActive: boolean;
+  sellingPrice: number;
+  reorderPoint: number;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 };
 
-export type EditBookDraft = NewBookDraft;
+export type CatalogProductDraft = {
+  sku: string;
+  title: string;
+  author: string;
+  description: string;
+  category: string;
+  sellingPrice: string;
+  reorderPoint: string;
+};
+
+export type WarehouseApi = {
+  id: string;
+  code: string;
+  name: string;
+  is_active: boolean;
+  created_at?: string | null;
+};
+
+export type Warehouse = {
+  id: string;
+  code: string;
+  name: string;
+  isActive: boolean;
+  createdAt?: string | null;
+};
+
+export type WarehouseDraft = {
+  code: string;
+  name: string;
+};
+
+export type StockEntryApi = {
+  product_id: string;
+  sku: string;
+  title: string;
+  warehouse_code: string;
+  on_hand: number;
+  reserved: number;
+  reorder_point: number;
+  selling_price: number;
+};
+
+export type StockEntry = {
+  productId: string;
+  sku: string;
+  title: string;
+  warehouseCode: string;
+  onHand: number;
+  reserved: number;
+  reorderPoint: number;
+  sellingPrice: number;
+};
+
+export type StockLedgerEntryApi = {
+  id: string;
+  product_id: string;
+  sku: string;
+  title: string;
+  warehouse_code: string;
+  quantity_delta: number;
+  movement_type: string;
+  reference_type: string;
+  reference_id: string;
+  reason: string;
+  performed_by: string;
+  created_at: string;
+};
+
+export type StockLedgerEntry = {
+  id: string;
+  productId: string;
+  sku: string;
+  title: string;
+  warehouseCode: string;
+  quantityDelta: number;
+  movementType: string;
+  referenceType: string;
+  referenceId: string;
+  reason: string;
+  performedBy: string;
+  createdAt: string;
+};
+
+export type ProductSupplierLinkApi = {
+  supplier_id: string;
+  supplier_name: string;
+  supplier_sku: string;
+  is_primary: boolean;
+  last_purchase_price: number;
+};
+
+export type ProductSupplierLink = {
+  supplierId: string;
+  supplierName: string;
+  supplierSku: string;
+  isPrimary: boolean;
+  lastPurchasePrice: number;
+};
+
+export type ProductSupplierLinkDraft = {
+  supplierId: string;
+  supplierSku: string;
+  isPrimary: boolean;
+  lastPurchasePrice: string;
+};
 
 export type Supplier = {
   id: string;
@@ -49,108 +148,134 @@ export type SupplierDraft = {
   notes: string;
 };
 
-export type PurchaseOrder = {
-  id: string;
-  supplierId?: string;
-  supplier: string;
-  bookId: string;
-  bookName: string;
-  bookSku?: string;
-  unitPrice?: number;
+export type PurchaseOrderLineApi = {
+  line_id: string;
+  product_id: string;
+  product_title: string;
   quantity: number;
-  deliveredQuantity: number;
-  status: "offen" | "teilgeliefert" | "geliefert";
-  createdAt: string;
-  deliveredAt?: string;
+  received_quantity: number;
+  remaining_quantity: number;
+  unit_cost: number;
 };
 
 export type PurchaseOrderApi = {
   id: string;
+  order_number: string;
   supplier_id: string;
   supplier_name: string;
-  book_id: string;
-  book_name: string;
-  book_sku?: string;
-  unit_price?: number;
-  quantity: number;
-  delivered_quantity: number;
-  status: "offen" | "teilgeliefert" | "geliefert";
-  created_at: string;
-  delivered_at?: string | null;
+  status: string;
+  ordered_at: string;
+  received_at?: string | null;
+  lines: PurchaseOrderLineApi[];
 };
 
-export type IncomingDelivery = {
+export type PurchaseOrderLine = {
+  lineId: string;
+  productId: string;
+  productTitle: string;
+  quantity: number;
+  receivedQuantity: number;
+  remainingQuantity: number;
+  unitCost: number;
+};
+
+export type PurchaseOrder = {
   id: string;
-  orderId: string;
+  orderNumber: string;
   supplierId: string;
-  supplier: string;
-  bookId: string;
-  bookName: string;
-  quantity: number;
-  unitPrice: number;
-  receivedAt: string;
+  supplierName: string;
+  status: string;
+  orderedAt: string;
+  receivedAt?: string | null;
+  lines: PurchaseOrderLine[];
 };
 
-export type IncomingDeliveryApi = {
-  id: string;
-  order_id: string;
-  supplier_id: string;
-  supplier_name: string;
-  book_id: string;
-  book_name: string;
+export type PurchaseOrderDraftLine = {
+  productId: string;
+  quantity: string;
+  unitCost: string;
+};
+
+export type PurchaseOrderReceiveDraft = {
+  warehouseCode: string;
+  lines: Record<string, string>;
+};
+
+export type SaleOrderLineApi = {
+  line_id: string;
+  product_id: string;
+  product_name: string;
   quantity: number;
   unit_price: number;
-  received_at: string;
+  discount: number;
+  total: number;
 };
 
-export type MovementApi = {
-  id: string;
-  book_id: string;
-  book_name: string;
-  quantity_change: number;
-  movement_type: "IN" | "OUT" | "CORRECTION";
-  reason?: string | null;
-  timestamp?: string | null;
-  performed_by?: string;
+export type AppliedDiscountApi = {
+  description: string;
+  amount: number;
 };
 
-export type Movement = {
-  id: string;
-  book_id: string;
-  book_name: string;
-  quantity_change: number;
-  movement_type: "IN" | "OUT" | "CORRECTION";
-  reason?: string | null;
-  timestamp: string;
-  performed_by: string;
+export type SaleOrderApi = {
+  order_id: string;
+  order_number: string;
+  warehouse_code: string;
+  status: string;
+  created_at: string;
+  subtotal: number;
+  discount_total: number;
+  total: number;
+  lines: SaleOrderLineApi[];
+  discounts: AppliedDiscountApi[];
 };
 
-export type ReorderDraft = {
-  bookId: string;
-  supplierId: string;
-  quantity: string;
-  unitPrice: string;
-};
-
-export type SaleType = "Verkauf" | "Retoure";
-
-export type SaleEntry = {
-  id: string;
-  bookId: string;
-  bookName: string;
-  type: SaleType;
+export type SaleOrderLine = {
+  lineId: string;
+  productId: string;
+  productName: string;
   quantity: number;
   unitPrice: number;
+  discount: number;
   total: number;
-  createdAt: string;
-  reason: string;
-  discountAmount?: number;
 };
 
-export type BookApi = Book & {
-  purchase_price?: number;
-  sell_price?: number;
-  supplier_id?: string;
+export type AppliedDiscount = {
+  description: string;
+  amount: number;
+};
+
+export type SaleOrder = {
+  orderId: string;
+  orderNumber: string;
+  warehouseCode: string;
+  status: string;
+  createdAt: string;
+  subtotal: number;
+  discountTotal: number;
+  total: number;
+  lines: SaleOrderLine[];
+  discounts: AppliedDiscount[];
+};
+
+export type SaleDraft = {
+  warehouseCode: string;
+  productId: string;
+  quantity: string;
+  customDiscountAmount: string;
+  isFirstCustomer: boolean;
+};
+
+export type ReturnDraft = {
+  salesOrderId: string;
+  salesOrderLineId: string;
+  quantity: string;
+  reason: string;
+};
+
+export type ReturnResponse = {
+  return_id: string;
+  return_number: string;
+  refund_total: number;
 };
 
 export type AppSettings = {
@@ -159,18 +284,6 @@ export type AppSettings = {
   autoRefresh: boolean;
   autoRefreshSeconds: number;
 };
-
-export type PageKey =
-  | "dashboard"
-  | "lager"
-  | "katalog"
-  | "bestellen"
-  | "wareneingang"
-  | "verkauf"
-  | "lieferanten"
-  | "reports"
-  | "einstellungen"
-  | "activity";
 
 export type ActivityLog = {
   id: string;

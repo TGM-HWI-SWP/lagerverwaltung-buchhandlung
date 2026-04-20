@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -13,27 +14,27 @@ export function ReportsPage({ card, dark, onOpenDashboard }: ReportsPageProps) {
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const mutedText = dark ? "text-gray-400" : "text-gray-500";
 
-  const downloadInventoryPdf = async () => {
+  const downloadStockPdf = async () => {
     setDownloading(true);
     setDownloadError(null);
     try {
-      const apiBase =
-        (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:8000";
-      const response = await fetch(`${apiBase}/reports/inventory-pdf`);
+      const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:8000";
+      const response = await fetch(`${apiBase}/reports/stock-pdf`);
       if (!response.ok) {
-        throw new Error(`API-Fehler: ${response.status}`);
+        const detail = await response.text();
+        throw new Error(detail || `API-Fehler: ${response.status}`);
       }
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = "lagerbestand.pdf";
+      link.download = "stock-report.pdf";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err) {
-      setDownloadError(err instanceof Error ? err.message : "Unbekannter Fehler");
+      setDownloadError(err instanceof Error ? err.message : "Bericht konnte nicht geladen werden.");
     } finally {
       setDownloading(false);
     }
@@ -43,26 +44,26 @@ export function ReportsPage({ card, dark, onOpenDashboard }: ReportsPageProps) {
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
       <Card className={`${card} xl:col-span-2`}>
         <CardContent className="p-6">
-          <h2 className="mb-2 text-xl font-semibold">Lagerbestandsbericht</h2>
+          <h2 className="mb-2 text-xl font-semibold">Bestandsbericht nach Lagerort</h2>
           <p className={`max-w-2xl text-sm ${mutedText}`}>
-            Erzeugt einen PDF-Bericht mit der aktuellen Verteilung des Lagerbestands nach Kategorien.
+            Der PDF-Bericht aggregiert den aktuellen Bestand je Lagerort und passt damit zum neuen Stock- und Ledger-Modell.
           </p>
-          <Button className="mt-4" onClick={downloadInventoryPdf} disabled={downloading}>
+          <Button className="mt-4" onClick={downloadStockPdf} disabled={downloading}>
             {downloading ? "PDF wird erstellt…" : "PDF exportieren"}
           </Button>
-          {downloadError && (
-            <p className="mt-2 text-sm text-red-400">Fehler: {downloadError}</p>
-          )}
+          {downloadError ? <p className="mt-2 text-sm text-red-400">Fehler: {downloadError}</p> : null}
         </CardContent>
       </Card>
 
       <Card className={card}>
         <CardContent className="p-6">
-          <h2 className="mb-2 text-xl font-semibold">Bestandsentwicklung</h2>
+          <h2 className="mb-2 text-xl font-semibold">Dashboards & Exporte</h2>
           <p className={`text-sm ${mutedText}`}>
-            Die wichtigsten Verläufe siehst du bereits im Dashboard. Weitere Berichte können hier ergänzt werden.
+            Umsatz, Lagerwert und Gesamtbestand laufen bereits im Dashboard zusammen. Weitere CSV-Exporte kommen direkt aus dem Backend.
           </p>
-          <Button className="mt-4" variant="outline" onClick={onOpenDashboard}>Zum Dashboard</Button>
+          <Button className="mt-4" variant="outline" onClick={onOpenDashboard}>
+            Zum Dashboard
+          </Button>
         </CardContent>
       </Card>
     </div>

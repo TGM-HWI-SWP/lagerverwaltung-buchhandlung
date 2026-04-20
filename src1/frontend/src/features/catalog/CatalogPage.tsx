@@ -1,255 +1,325 @@
-import { useMemo, useState } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { apiDelete, apiPut } from "@/api/client";
-import { mapBookApiToBook, mapDraftToBookPayload } from "@/lib/mappers";
+import { apiDelete, apiGet, apiPost, apiPut } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import type { Book, EditBookDraft } from "@/types";
+import { mapCatalogProductApi, mapProductSupplierLinkApi } from "@/lib/mappers";
+import type {
+  CatalogProduct,
+  CatalogProductApi,
+  CatalogProductDraft,
+  ProductSupplierLink,
+  ProductSupplierLinkApi,
+  ProductSupplierLinkDraft,
+  Supplier,
+} from "@/types";
 
 interface CatalogPageProps {
   card: string;
   dark: boolean;
-  books: Book[];
-  setBooks: Dispatch<SetStateAction<Book[]>>;
-  updateBookInState: (book: Book) => void;
+  products: CatalogProduct[];
+  suppliers: Supplier[];
+  reloadProducts: () => Promise<void>;
 }
 
-export function CatalogPage({ card, dark, books, setBooks, updateBookInState }: CatalogPageProps) {
-  const [search, setSearch] = useState("");
-  const [editingBookId, setEditingBookId] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [editDraft, setEditDraft] = useState<EditBookDraft>({
-    name: "",
-    author: "",
-    description: "",
-    purchasePrice: "",
-    sellingPrice: "",
-    quantity: "",
-    sku: "",
-    category: "",
-    supplierId: "",
-    notes: "",
-  });
+const EMPTY_DRAFT: CatalogProductDraft = {
+  sku: "",
+  title: "",
+  author: "",
+  description: "",
+  category: "",
+  sellingPrice: "",
+  reorderPoint: "0",
+};
 
-  const mutedText = dark ? "text-gray-400" : "text-gray-500";
-  const tableBorder = dark ? "border-gray-800" : "border-gray-200";
+export function CatalogPage({ card, dark, products, suppliers, reloadProducts }: CatalogPageProps) {
+  const [search, setSearch] = useState("");
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<CatalogProductDraft>(EMPTY_DRAFT);
+  const [supplierLinks, setSupplierLinks] = useState<ProductSupplierLinkDraft[]>([]);
+  const [loadingLinks, setLoadingLinks] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const inputClass = dark
     ? "w-full rounded-2xl border border-gray-700 bg-gray-950 px-4 py-3 text-sm text-white placeholder:text-gray-400"
     : "w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 placeholder:text-gray-500";
-  const selectedBook = books.find((book) => book.id === editingBookId) ?? null;
+  const mutedText = dark ? "text-gray-400" : "text-gray-500";
+  const borderClass = dark ? "border-gray-800" : "border-gray-200";
+  const selectedProduct = products.find((product) => product.id === selectedProductId) ?? null;
 
-  const filteredBooks = useMemo(() => {
+  const filteredProducts = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return books;
-    return books.filter((book) =>
-      [book.name, book.author, book.category, book.description, book.notes ?? "", book.sku].some((value) =>
+    if (!query) return products;
+    return products.filter((product) =>
+      [product.title, product.author, product.category, product.description, product.sku].some((value) =>
         value.toLowerCase().includes(query),
       ),
     );
-  }, [books, search]);
+  }, [products, search]);
 
-  const openEditor = (book: Book) => {
-    setEditingBookId(book.id);
-    setDeleteConfirm(false);
-    setEditError(null);
-    setEditDraft({
-      name: book.name,
-      author: book.author,
-      description: book.description,
-      purchasePrice: String(book.purchasePrice || 0),
-      sellingPrice: String(book.sellingPrice || 0),
-      quantity: String(book.quantity),
-      sku: book.sku,
-      category: book.category,
-      supplierId: book.supplierId ?? "",
-      notes: book.notes ?? "",
-    });
+  useEffect(() => {
+    if (!selectedProduct) {
+      setSupplierLinks([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingLinks(true);
+    apiGet<ProductSupplierLinkApi[]>(`/product-suppliers/${selectedProduct.id}`)
+      .then((rows) => {
+        if (cancelled) return;
+        const mapped = rows.map(mapProductSupplierLinkApi);
+        setSupplierLinks(
+          mapped.map((link) => ({
+            supplierId: link.supplierId,
+            supplierSku: link.supplierSku,
+            isPrimary: link.isPrimary,
+            lastPurchasePrice: String(link.lastPurchasePrice),
+          })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setSupplierLinks([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingLinks(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProduct?.id]);
+
+  const openNewProduct = () => {
+    setSelectedProductId(null);
+    setDraft(EMPTY_DRAFT);
+    setSupplierLinks([]);
+    setError(null);
   };
 
-  const saveBook = async () => {
-    if (!editingBookId) return;
-    setEditing(true);
-    setEditError(null);
+  const openProduct = (product: CatalogProduct) => {
+    setSelectedProductId(product.id);
+    setDraft({
+      sku: product.sku,
+      title: product.title,
+      author: product.author,
+      description: product.description,
+      category: product.category,
+      sellingPrice: String(product.sellingPrice),
+      reorderPoint: String(product.reorderPoint),
+    });
+    setError(null);
+  };
+
+  const saveProduct = async () => {
+    setSaving(true);
+    setError(null);
     try {
-      const updated = await apiPut<Book, Record<string, string | number | null>>(
-        `/books/${editingBookId}`,
-        mapDraftToBookPayload(editDraft, { id: editingBookId }),
-      );
-      updateBookInState(mapBookApiToBook(updated));
-      setEditingBookId(null);
+      let currentProduct = selectedProduct;
+      if (!selectedProduct) {
+        const created = await apiPost<CatalogProductApi, Record<string, string | number>>("/catalog-products", {
+          sku: draft.sku.trim(),
+          title: draft.title.trim(),
+          author: draft.author.trim(),
+          description: draft.description.trim(),
+          category: draft.category.trim(),
+          selling_price: Number(draft.sellingPrice) || 0,
+          reorder_point: Math.max(0, Number(draft.reorderPoint) || 0),
+        });
+        currentProduct = mapCatalogProductApi(created);
+        setSelectedProductId(currentProduct.id);
+      } else {
+        const updated = await apiPut<CatalogProductApi, Record<string, string | number | boolean>>(
+          `/catalog-products/${selectedProduct.id}`,
+          {
+            title: draft.title.trim(),
+            author: draft.author.trim(),
+            description: draft.description.trim(),
+            category: draft.category.trim(),
+            selling_price: Number(draft.sellingPrice) || 0,
+            reorder_point: Math.max(0, Number(draft.reorderPoint) || 0),
+            is_active: true,
+          },
+        );
+        currentProduct = mapCatalogProductApi(updated);
+      }
+
+      const cleanedLinks = supplierLinks
+        .filter((link) => link.supplierId.trim() !== "")
+        .map((link) => ({
+          supplier_id: link.supplierId.trim(),
+          supplier_sku: link.supplierSku.trim(),
+          is_primary: link.isPrimary,
+          last_purchase_price: Math.max(0, Number(link.lastPurchasePrice) || 0),
+        }));
+
+      if (currentProduct) {
+        await apiPut<ProductSupplierLinkApi[], { links: typeof cleanedLinks }>(
+          `/product-suppliers/${currentProduct.id}`,
+          { links: cleanedLinks },
+        );
+      }
+
+      await reloadProducts();
     } catch (err) {
-      setEditError(err instanceof Error ? err.message : "Katalogeintrag konnte nicht gespeichert werden.");
+      setError(err instanceof Error ? err.message : "Katalogprodukt konnte nicht gespeichert werden.");
     } finally {
-      setEditing(false);
+      setSaving(false);
     }
   };
 
-  const deleteBook = async () => {
-    if (!editingBookId) return;
+  const deleteProduct = async () => {
+    if (!selectedProduct) return;
     setDeleting(true);
-    setEditError(null);
+    setError(null);
     try {
-      await apiDelete(`/books/${editingBookId}`);
-      setBooks((prev) => prev.filter((book) => book.id !== editingBookId));
-      setEditingBookId(null);
-      setDeleteConfirm(false);
+      await apiDelete(`/catalog-products/${selectedProduct.id}`);
+      setSelectedProductId(null);
+      setDraft(EMPTY_DRAFT);
+      setSupplierLinks([]);
+      await reloadProducts();
     } catch (err) {
-      setEditError(err instanceof Error ? err.message : "Buch konnte nicht gelöscht werden.");
+      setError(err instanceof Error ? err.message : "Produkt konnte nicht entfernt werden.");
     } finally {
       setDeleting(false);
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
       <Card className={card}>
         <CardContent className="p-6">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-xl font-semibold">Katalog</h2>
-              <p className={`mt-1 text-sm ${mutedText}`}>Hier werden Stammdaten gepflegt: Titel, Preise, Beschreibung, Notizen, SKU und Lieferant. Entfernen eines Buchs passiert ebenfalls hier.</p>
+              <h2 className="text-xl font-semibold">Katalogprodukte</h2>
+              <p className={`mt-1 text-sm ${mutedText}`}>Stammdaten, Verkaufspreis und Lieferantenbezüge bleiben vom Lagerbestand getrennt.</p>
             </div>
+            <Button onClick={openNewProduct}>Neues Produkt</Button>
           </div>
 
-          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-5">
             <input
-              placeholder="Suche nach Titel, Autor, SKU, Beschreibung oder Notiz..."
-              className={`${inputClass} sm:max-w-xl`}
+              placeholder="Suche nach Titel, Autor, Kategorie oder SKU..."
+              className={inputClass}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <Button variant="outline" onClick={() => setSearch("")}>
-              Filter leeren
-            </Button>
           </div>
 
-          {selectedBook && (
-            <div className={`mt-5 rounded-3xl border p-5 ${dark ? "border-gray-800 bg-gray-950/70" : "border-gray-200 bg-gray-50"}`}>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold">Katalogeintrag bearbeiten</h3>
-                  <p className={`mt-1 text-sm ${mutedText}`}>Bestand wird im Lager gepflegt und bleibt hier nur sichtbar.</p>
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            {filteredProducts.map((product) => (
+              <button
+                key={product.id}
+                type="button"
+                onClick={() => openProduct(product)}
+                className={`rounded-3xl border p-4 text-left transition ${selectedProductId === product.id ? "border-blue-500/70 bg-blue-500/10" : dark ? "border-gray-800 bg-gray-950/60 hover:border-blue-500/50" : "border-gray-200 bg-gray-50 hover:border-blue-300"}`}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="font-semibold">{product.title}</div>
+                    <div className={`mt-1 text-sm ${mutedText}`}>{product.author || "Autor unbekannt"}</div>
+                  </div>
+                  <div className={`rounded-full px-3 py-1 text-xs font-semibold ${product.isActive ? "bg-emerald-500/15 text-emerald-400" : "bg-gray-500/15 text-gray-400"}`}>
+                    {product.isActive ? "Aktiv" : "Inaktiv"}
+                  </div>
                 </div>
-                <Button variant="outline" onClick={() => setEditingBookId(null)}>
-                  Schließen
-                </Button>
-              </div>
-
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <input className={inputClass} placeholder="Titel" value={editDraft.name} onChange={(e) => setEditDraft((prev) => ({ ...prev, name: e.target.value }))} />
-                <input className={inputClass} placeholder="Autor" value={editDraft.author} onChange={(e) => setEditDraft((prev) => ({ ...prev, author: e.target.value }))} />
-                <input className={inputClass} placeholder="Kategorie" value={editDraft.category} onChange={(e) => setEditDraft((prev) => ({ ...prev, category: e.target.value }))} />
-                <input className={inputClass} placeholder="SKU" value={editDraft.sku} onChange={(e) => setEditDraft((prev) => ({ ...prev, sku: e.target.value }))} />
-                <input className={inputClass} placeholder="Einkaufspreis in EUR" value={editDraft.purchasePrice} onChange={(e) => setEditDraft((prev) => ({ ...prev, purchasePrice: e.target.value }))} />
-                <input className={inputClass} placeholder="Verkaufspreis in EUR" value={editDraft.sellingPrice} onChange={(e) => setEditDraft((prev) => ({ ...prev, sellingPrice: e.target.value }))} />
-                <input className={inputClass} placeholder="Lieferant-ID" value={editDraft.supplierId} onChange={(e) => setEditDraft((prev) => ({ ...prev, supplierId: e.target.value }))} />
-                <div className={`rounded-2xl border px-4 py-3 text-sm ${dark ? "border-gray-700 bg-gray-900 text-gray-300" : "border-gray-200 bg-white text-gray-700"}`}>
-                  Bestand aktuell: <span className="font-semibold">{selectedBook.quantity} Stk.</span>
+                <div className={`mt-3 grid gap-1 text-sm ${mutedText}`}>
+                  <div>SKU: {product.sku}</div>
+                  <div>Kategorie: {product.category || "-"}</div>
+                  <div>VK: €{product.sellingPrice.toFixed(2)} · Meldebestand: {product.reorderPoint}</div>
                 </div>
-                <textarea className={`${inputClass} min-h-28 md:col-span-2`} placeholder="Beschreibung" value={editDraft.description} onChange={(e) => setEditDraft((prev) => ({ ...prev, description: e.target.value }))} />
-                <textarea className={`${inputClass} min-h-24 md:col-span-2`} placeholder="Notizen" value={editDraft.notes} onChange={(e) => setEditDraft((prev) => ({ ...prev, notes: e.target.value }))} />
-              </div>
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
-              <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center">
-                <Button onClick={saveBook} disabled={editing}>
-                  {editing ? "Speichere..." : "Katalog speichern"}
-                </Button>
-                {!deleteConfirm ? (
-                  <Button variant="destructive" onClick={() => setDeleteConfirm(true)}>
-                    Aus Katalog entfernen
-                  </Button>
-                ) : (
-                  <>
-                    <span className="text-sm text-red-400">Wirklich endgültig entfernen?</span>
-                    <Button variant="destructive" onClick={deleteBook} disabled={deleting}>
-                      {deleting ? "Lösche..." : "Ja, entfernen"}
-                    </Button>
-                    <Button variant="outline" onClick={() => setDeleteConfirm(false)}>
-                      Abbrechen
-                    </Button>
-                  </>
-                )}
-              </div>
-              {editError && <p className="mt-3 text-sm text-red-400">{editError}</p>}
+      <Card className={card}>
+        <CardContent className="p-6">
+          <h3 className="text-lg font-semibold">{selectedProduct ? "Produkt bearbeiten" : "Produkt anlegen"}</h3>
+          <p className={`mt-1 text-sm ${mutedText}`}>Der Bestand je Lagerort wird separat unter Bestand & Ledger verwaltet.</p>
+
+          <div className="mt-4 grid gap-3">
+            <input className={inputClass} placeholder="SKU" value={draft.sku} onChange={(e) => setDraft((prev) => ({ ...prev, sku: e.target.value }))} />
+            <input className={inputClass} placeholder="Titel" value={draft.title} onChange={(e) => setDraft((prev) => ({ ...prev, title: e.target.value }))} />
+            <input className={inputClass} placeholder="Autor" value={draft.author} onChange={(e) => setDraft((prev) => ({ ...prev, author: e.target.value }))} />
+            <input className={inputClass} placeholder="Kategorie" value={draft.category} onChange={(e) => setDraft((prev) => ({ ...prev, category: e.target.value }))} />
+            <input className={inputClass} placeholder="Verkaufspreis" inputMode="decimal" value={draft.sellingPrice} onChange={(e) => setDraft((prev) => ({ ...prev, sellingPrice: e.target.value }))} />
+            <input className={inputClass} placeholder="Meldebestand" inputMode="numeric" value={draft.reorderPoint} onChange={(e) => setDraft((prev) => ({ ...prev, reorderPoint: e.target.value }))} />
+            <textarea className={`${inputClass} min-h-24`} placeholder="Beschreibung" value={draft.description} onChange={(e) => setDraft((prev) => ({ ...prev, description: e.target.value }))} />
+          </div>
+
+          <div className={`mt-5 rounded-3xl border p-4 ${borderClass}`}>
+            <div className="flex items-center justify-between">
+              <h4 className="font-semibold">Lieferantenverknüpfungen</h4>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setSupplierLinks((prev) => [
+                    ...prev,
+                    { supplierId: suppliers[0]?.id ?? "", supplierSku: "", isPrimary: prev.length === 0, lastPurchasePrice: "0" },
+                  ])
+                }
+              >
+                Zeile hinzufügen
+              </Button>
             </div>
-          )}
-
-          <div className="mt-5 space-y-3 md:hidden">
-            {filteredBooks.length === 0 ? (
-              <div className={`rounded-2xl border border-dashed p-4 text-sm ${mutedText}`}>Keine Katalogeinträge gefunden.</div>
-            ) : (
-              filteredBooks.map((book) => (
-                <div key={book.id} className={`rounded-2xl border p-4 ${dark ? "border-gray-800 bg-gray-950/60" : "border-gray-200 bg-gray-50"}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-semibold">{book.name}</div>
-                      <div className={`mt-1 text-sm ${mutedText}`}>{book.author || "Autor unbekannt"}</div>
-                    </div>
-                    <Button size="sm" variant="outline" onClick={() => openEditor(book)}>
-                      Bearbeiten
+            {loadingLinks ? <p className={`mt-3 text-sm ${mutedText}`}>Lade Lieferanten...</p> : null}
+            <div className="mt-3 space-y-3">
+              {supplierLinks.length === 0 ? <p className={`text-sm ${mutedText}`}>Noch keine Lieferanten hinterlegt.</p> : null}
+              {supplierLinks.map((link, index) => (
+                <div key={`${link.supplierId}-${index}`} className="grid gap-2 rounded-2xl border p-3 md:grid-cols-[1.3fr_1fr_1fr_auto]">
+                  <select
+                    className={inputClass}
+                    value={link.supplierId}
+                    onChange={(e) => setSupplierLinks((prev) => prev.map((row, rowIndex) => rowIndex === index ? { ...row, supplierId: e.target.value } : row))}
+                  >
+                    <option value="">Lieferant wählen</option>
+                    {suppliers.map((supplier) => (
+                      <option key={supplier.id} value={supplier.id}>
+                        {supplier.name}
+                      </option>
+                    ))}
+                  </select>
+                  <input className={inputClass} placeholder="Supplier SKU" value={link.supplierSku} onChange={(e) => setSupplierLinks((prev) => prev.map((row, rowIndex) => rowIndex === index ? { ...row, supplierSku: e.target.value } : row))} />
+                  <input className={inputClass} placeholder="EK zuletzt" value={link.lastPurchasePrice} onChange={(e) => setSupplierLinks((prev) => prev.map((row, rowIndex) => rowIndex === index ? { ...row, lastPurchasePrice: e.target.value } : row))} />
+                  <div className="flex items-center gap-2">
+                    <label className={`text-sm ${mutedText}`}>
+                      <input
+                        type="checkbox"
+                        checked={link.isPrimary}
+                        onChange={(e) =>
+                          setSupplierLinks((prev) =>
+                            prev.map((row, rowIndex) => ({
+                              ...row,
+                              isPrimary: rowIndex === index ? e.target.checked : e.target.checked ? false : row.isPrimary,
+                            })),
+                          )
+                        }
+                      />{" "}
+                      Primär
+                    </label>
+                    <Button variant="outline" size="sm" onClick={() => setSupplierLinks((prev) => prev.filter((_, rowIndex) => rowIndex !== index))}>
+                      Entfernen
                     </Button>
                   </div>
-                  <div className={`mt-3 space-y-1 text-sm ${dark ? "text-gray-300" : "text-gray-700"}`}>
-                    <div>SKU: {book.sku || "-"}</div>
-                    <div>Kategorie: {book.category || "-"}</div>
-                    <div>VK: €{book.sellingPrice.toFixed(2)} · EK: €{book.purchasePrice.toFixed(2)}</div>
-                    <div>Beschreibung: {book.description || "-"}</div>
-                    <div>Notiz: {book.notes || "-"}</div>
-                  </div>
                 </div>
-              ))
-            )}
+              ))}
+            </div>
           </div>
 
-          <div className="mt-5 hidden overflow-x-auto md:block">
-            <table className="min-w-full text-left text-sm">
-              <thead>
-                <tr className={`border-b ${tableBorder} text-xs uppercase ${mutedText}`}>
-                  <th className="py-3">Titel</th>
-                  <th>Autor</th>
-                  <th>SKU</th>
-                  <th>Kategorie</th>
-                  <th>Preise</th>
-                  <th>Beschreibung</th>
-                  <th>Notizen</th>
-                  <th>Aktion</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredBooks.length === 0 ? (
-                  <tr>
-                    <td className={`py-4 ${mutedText}`} colSpan={8}>
-                      Keine Katalogeinträge gefunden.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredBooks.map((book) => (
-                    <tr key={book.id} className={`border-b ${tableBorder} last:border-b-0 align-top`}>
-                      <td className="py-3 font-medium">{book.name}</td>
-                      <td>{book.author || "-"}</td>
-                      <td className="font-mono text-xs">{book.sku || "-"}</td>
-                      <td>{book.category || "-"}</td>
-                      <td>
-                        <div>VK €{book.sellingPrice.toFixed(2)}</div>
-                        <div className={mutedText}>EK €{book.purchasePrice.toFixed(2)}</div>
-                      </td>
-                      <td className="max-w-xs">{book.description || "-"}</td>
-                      <td className="max-w-xs">{book.notes || "-"}</td>
-                      <td>
-                        <Button size="sm" variant="outline" onClick={() => openEditor(book)}>
-                          Bearbeiten
-                        </Button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Button onClick={saveProduct} disabled={saving}>
+              {saving ? "Speichere..." : selectedProduct ? "Produkt speichern" : "Produkt anlegen"}
+            </Button>
+            {selectedProduct ? (
+              <Button variant="destructive" onClick={deleteProduct} disabled={deleting}>
+                {deleting ? "Entferne..." : "Aus Katalog entfernen"}
+              </Button>
+            ) : null}
           </div>
+          {error ? <p className="mt-3 text-sm text-red-400">{error}</p> : null}
         </CardContent>
       </Card>
     </div>
