@@ -11,6 +11,12 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U buchhandlung -d buchhandlung"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
 
   backend:
     build:
@@ -25,7 +31,8 @@ services:
       PYTHONPATH: /app
       DATABASE_URL: postgresql+psycopg://buchhandlung:buchhandlung@postgres:5432/buchhandlung
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"

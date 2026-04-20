@@ -1,4 +1,5 @@
 from pathlib import Path
+import time
 from uuid import uuid4
 
 from fastapi import FastAPI, Depends, HTTPException                             # FastAPI-Framework
@@ -7,6 +8,7 @@ from fastapi.responses import StreamingResponse                                 
 from sqlalchemy.orm import Session                                              # DB-Session
 from sqlalchemy import func
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import OperationalError
 
 import io                                                                       # PDF-Buffer
 from datetime import datetime                                                   # Zeitstempel im PDF
@@ -76,7 +78,21 @@ def _clamp_pagination(offset: int, limit: int, *, max_limit: int = 100) -> tuple
     return offset, limit
 
 
-Base.metadata.create_all(bind=engine)                                           # Tabellen erstellen
+def _initialize_database(retries: int = 20, delay_seconds: float = 1.5) -> None:
+    """Wait for the DB to accept connections before running schema setup."""
+    last_error: OperationalError | None = None
+    for attempt in range(1, retries + 1):
+        try:
+            Base.metadata.create_all(bind=engine)                               # Tabellen erstellen
+            ensure_schema()
+            return
+        except OperationalError as exc:
+            last_error = exc
+            if attempt == retries:
+                break
+            time.sleep(delay_seconds)
+    assert last_error is not None
+    raise last_error
 
 
 def _ensure_sqlite_schema():
@@ -296,12 +312,10 @@ def _seed_database():
         conn.commit()
 
 
+_initialize_database()
 _ensure_sqlite_schema()
 _seed_database()
 _ensure_default_supplier_data()
-
-# Explicit migration hook (currently no-op; keeps a clean seam for future extraction)
-ensure_schema()
 
 app = FastAPI(title=settings.app_name)                                          # App-Instanz
 
