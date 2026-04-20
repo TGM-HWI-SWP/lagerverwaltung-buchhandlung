@@ -13,10 +13,14 @@ dist/
 
 .env
 .env.*
+!.env.example
+!src1/backend/.env.example
 
 .idea/
 .vscode/
 .cursor/
+.codex
+.codex/
 
 # Logs
 *.log
@@ -40,4 +44,3 @@ htmlcov/
 *.sqlite
 *.sqlite3
 *.db
-

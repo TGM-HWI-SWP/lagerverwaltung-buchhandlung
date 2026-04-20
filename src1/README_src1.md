@@ -5,7 +5,7 @@ In `src1/` liegt der aktuelle Produktcode (Frontend + Backend).
 ### Backend
 
 - Pfad: `src1/backend`
-- Stack: FastAPI, SQLAlchemy, SQLite
+- Stack: FastAPI, SQLAlchemy, lokal SQLite / in Docker PostgreSQL
 - Start (lokal):
 
 ```bash
@@ -44,3 +44,9 @@ Im Repo-Root:
 ```bash
 docker compose up --build
 ```
+
+Dann laufen:
+
+- Frontend auf `http://localhost:5173`
+- Backend auf `http://localhost:8000`
+- PostgreSQL im Compose-Netz fuer das Backend
