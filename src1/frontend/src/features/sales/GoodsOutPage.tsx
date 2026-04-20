@@ -215,7 +215,8 @@ export function GoodsOutPage({
   };
 
   return (
-    <div className={`grid gap-6 ${posMode ? "2xl:grid-cols-[400px_minmax(0,1fr)]" : "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"}`}>
+    <div className={`mx-auto w-full ${posMode ? "max-w-[1380px]" : ""}`}>
+      <div className={`grid items-start gap-6 ${posMode ? "xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[390px_minmax(0,1fr)]" : "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"}`}>
       <Card className={posMode ? posCard : card}>
         <CardContent className={`${posMode ? "p-7" : "p-6"}`}>
           <div className="flex items-start justify-between gap-4">
@@ -307,7 +308,7 @@ export function GoodsOutPage({
                 {warehouseCode} · {selectableProducts.length} Artikel · {totalAvailable} Stk.
               </div>
             </div>
-            <div className={`mt-5 grid gap-3 ${posMode ? "xl:grid-cols-[minmax(0,1fr)_220px]" : ""}`}>
+            <div className={`mt-5 grid gap-3 ${posMode ? "lg:grid-cols-[minmax(0,1fr)_190px]" : ""}`}>
               <input
                 className={`${inputClass} ${posMode ? "h-16 text-base" : ""}`}
                 placeholder="Produkte nach Titel oder SKU suchen"
@@ -319,7 +320,7 @@ export function GoodsOutPage({
               </button>
             </div>
             {productGrid.length ? (
-              <div className={`mt-6 grid gap-4 ${posMode ? "sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" : "md:grid-cols-2 xl:grid-cols-3"}`}>
+              <div className={`mt-6 grid gap-4 ${posMode ? "sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3" : "md:grid-cols-2 xl:grid-cols-3"}`}>
                 {productGrid.map((entry) => (
                   <ProductTile key={entry.productId} entry={entry} />
                 ))}
@@ -382,7 +383,7 @@ export function GoodsOutPage({
             ) : null}
 
             {salesTab === "returns" ? (
-              <div className={`mt-6 grid gap-6 ${posMode ? "xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,420px)]" : "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"}`}>
+              <div className={`mt-6 grid gap-6 ${posMode ? "2xl:grid-cols-[minmax(0,1.15fr)_360px]" : "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"}`}>
                 <Card className={dark ? "border-gray-800 bg-gray-950/50" : "border-gray-200 bg-gray-50"}>
                   <CardContent className="p-6">
                     <h2 className="text-xl font-semibold">Retoure</h2>
@@ -417,7 +418,7 @@ export function GoodsOutPage({
                   </CardContent>
                 </Card>
 
-                <Card className={dark ? "border-gray-800 bg-gray-950/50" : "border-gray-200 bg-gray-50"}>
+                <Card className={`${dark ? "border-gray-800 bg-gray-950/50" : "border-gray-200 bg-gray-50"} ${posMode ? "2xl:max-w-[360px]" : ""}`}>
                   <CardContent className="p-6">
                     <h3 className="text-xl font-semibold">Touch-Retoure</h3>
                     <div className="mt-5">
@@ -479,6 +480,7 @@ export function GoodsOutPage({
             ) : null}
           </CardContent>
         </Card>
+      </div>
       </div>
     </div>
   );
