@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
-from app.core.auth_staff import AuthUser, hash_password, hash_pin, require_user, verify_pin, verify_password
+from app.core.auth_staff import AuthUser, require_user, verify_pin, verify_password
 from app.core.auth_tokens import sign_token
 from app.core.config import settings
 from app.db.models_auth import StaffUser

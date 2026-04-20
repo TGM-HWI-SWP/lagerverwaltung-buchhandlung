@@ -1,11 +1,11 @@
-## Git Workflow
+## Git-Workflow
 
-Dieser Workflow ist bewusst einfach gehalten (Schulprojekt) und passt zu einem Repo mit `main` als Integrationsbranch.
+Dieser Workflow ist bewusst einfach gehalten und passt zum Schulprojekt.
 
 ### Branching
 
-- `main`: stabiler Stand
-- Feature branches: `feature/<name>/<kurzbeschreibung>`
+- `main`: stabiler Integrationsstand
+- Feature-Branches: `feature/<name>/<kurzbeschreibung>`
 
 ### Arbeiten am Feature
 
@@ -16,14 +16,14 @@ git commit -m "Feat: <kurzbeschreibung>"
 git push -u origin HEAD
 ```
 
-### Pull Request (empfohlen)
+### Pull Request
 
-- kurze Summary
-- Testplan (was wurde geklickt/ausgeführt)
-- Screenshots falls UI-Änderungen
+- kurze Zusammenfassung
+- kurzer Testplan
+- Screenshots bei sichtbaren UI-Änderungen
 
 ### Konventionen
 
-- Keine großen “Mixed” Commits (Code + Docs + Format in einem)
-- API-Änderung? Dann auch `docs/contracts.md` anpassen.
-
+- keine unnötig gemischten Commits
+- API-Änderung? Dann auch `docs/contracts.md` anpassen
+- Doku-Änderung? Dann auf den tatsächlichen Produktstand unter `src1/` beziehen

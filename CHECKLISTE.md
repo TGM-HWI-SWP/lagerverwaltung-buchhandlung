@@ -1,23 +1,29 @@
-## Release / Merge Checklist
+## Release- / Merge-Checkliste
 
 ### Backend (`src1/backend`)
 
 - [ ] `uvicorn app.main:app` startet ohne Traceback
-- [ ] Endpunkte reagieren:
-  - [ ] `GET /health`
-  - [ ] `GET /books`
-  - [ ] `POST /movements` (Bestand ändert sich erwartungsgemäß)
-- [ ] `docs/contracts.md` stimmt mit Code unter `app/contracts/` überein
+- [ ] `GET /health` antwortet erfolgreich
+- [ ] `GET /books` liefert Daten
+- [ ] `POST /movements` ändert den Bestand erwartungsgemäß
+- [ ] Auth-Flows funktionieren:
+  - [ ] Bootstrap-Admin
+  - [ ] Kassierer-Login per PIN
+  - [ ] Admin-Login per Passwort
+- [ ] `docs/contracts.md` stimmt mit dem aktuellen Produkt-Contract überein
 
 ### Frontend (`src1/frontend`)
 
 - [ ] `npm run dev` startet
 - [ ] Bücherliste lädt
 - [ ] Lagerbewegung kann erstellt werden
+- [ ] Bestellung und Wareneingang funktionieren
+- [ ] Login-Ansicht ist bedienbar
 
-### Docs
+### Dokumentation
 
 - [ ] `README.md` Quickstart stimmt
 - [ ] `docs/architecture.md` beschreibt den aktuellen Stand
-- [ ] `docs/tests.md` ist nicht irreführend (Template vs aktuelles Produkt)
-
+- [ ] `docs/tests.md` ist nicht irreführend
+- [ ] `docs/known_issues.md` nennt keine veralteten Aussagen
+- [ ] `docs/changelog_kattner.md` ist bis `HEAD` aktualisiert

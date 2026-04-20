@@ -1,52 +1,34 @@
-## `src1/` – Produktcode
+# `src1` Produktstand
 
-In `src1/` liegt der aktuelle Produktcode (Frontend + Backend).
+`src1/` enthält den aktuellen Abgabe- und Produktcode.
 
-### Backend
+## Struktur
 
-- Pfad: `src1/backend`
-- Stack: FastAPI, SQLAlchemy, lokal SQLite / in Docker PostgreSQL
-- Start (lokal):
+- `backend/`: FastAPI, SQLAlchemy, Auth, Katalog-, Lager- und Verkaufslogik
+- `frontend/`: React/Vite-Frontend für Katalog, Lagerorte, Einkauf, Wareneingang und Verkauf
+
+## Fachlicher Kern
+
+Dieses Teilprojekt verwendet kein altes `books + quantity`-Modell mehr.
+
+Stattdessen gilt:
+
+- Katalogprodukt = Stammdaten
+- Stock Item = aktueller Bestand je Lagerort
+- Stock Ledger = unveränderliche Historie
+
+## Start
+
+Backend:
 
 ```bash
 cd src1/backend
-python -m venv .venv
-source .venv/bin/activate
-pip install -U pip
-pip install -e ".[dev]"
 uvicorn app.main:app --reload --port 8000
 ```
 
-Tests (Backend):
-
-```bash
-cd src1/backend
-source .venv/bin/activate
-python -m unittest -q tests.test_sqlite_schema
-```
-
-### Frontend
-
-- Pfad: `src1/frontend`
-- Stack: Vite, React
-- Start (lokal):
+Frontend:
 
 ```bash
 cd src1/frontend
-npm install
 npm run dev
 ```
-
-### Docker
-
-Im Repo-Root:
-
-```bash
-docker compose up --build
-```
-
-Dann laufen:
-
-- Frontend auf `http://localhost:5173`
-- Backend auf `http://localhost:8000`
-- PostgreSQL im Compose-Netz fuer das Backend

@@ -1,27 +1,33 @@
-## Backend (FastAPI)
+# Backend
 
-### Setup (venv)
+Das Backend basiert auf FastAPI und nutzt ein getrenntes Modell für Katalog, Lagerorte, Bestände und Historie.
 
-```bash
-cd src1/backend
-python -m venv .venv
-source .venv/bin/activate
-pip install -U pip
-pip install -e ".[dev]"
-```
+## Produktive Tabellen
 
-### Run
+- `suppliers`
+- `catalog_products`
+- `product_prices`
+- `warehouses`
+- `stock_items`
+- `stock_ledger_entries`
+- `product_suppliers`
+- `purchase_orders_v2`
+- `purchase_order_v2_lines`
+- `sales_orders`
+- `sales_order_lines`
+- `return_orders`
+- `return_order_lines`
+- `activity_logs`
+- `audit_events`
+- `staff_users`
+
+## Start
 
 ```bash
 uvicorn app.main:app --reload --port 8000
 ```
 
-Standardmaessig verwendet das Backend lokal eine SQLite-Datei `buchhandlung.db` im Backend-Ordner.
-Fuer Docker Compose wird automatisch PostgreSQL verwendet.
-
-### Tests
-
-This repo ships a stdlib-only schema test.
+## Tests
 
 ```bash
 python -m unittest -q tests.test_sqlite_schema

@@ -1,6 +1,6 @@
 # Lagerverwaltung Buchhandlung
 
-Buchhandlungsverwaltung mit FastAPI-Backend, React-Frontend und einer einfachen, abgabefesten Startkonfiguration.
+Buchhandlungsverwaltung mit FastAPI-Backend, React-Frontend und einem fachlich getrennten Modell für Katalog, Bestand und Historie.
 
 Der aktuelle Produktcode liegt unter `src1/`.
 
@@ -8,21 +8,35 @@ Der aktuelle Produktcode liegt unter `src1/`.
 - Frontend: `src1/frontend`
 - Dokumentation: `docs/`
 
+## Fachliches Modell
+
+Die Anwendung trennt bewusst:
+
+- `catalog_products` für Stammdaten
+- `warehouses` und `stock_items` für aktuellen Bestand je Lagerort
+- `stock_ledger_entries` für jede Bestandsänderung
+- `purchase_orders_v2` und `purchase_order_v2_lines` für Einkauf
+- `sales_orders` und `sales_order_lines` für Verkauf
+- `return_orders` für Retouren
+
+Damit wird Bestand nicht mehr im Produktstamm gespeichert.
+
 ## Funktionen
 
-- Buecher, Lagerbestaende und Lieferanten verwalten
-- Lagerbewegungen buchen
-- Bestellungen und Wareneingaenge abwickeln
-- Verkaeufe und Retouren erfassen
-- Activity-Log fuer nachvollziehbare Aenderungen
-- Rollenbasiertes Login fuer Kasse und Admin
+- Katalogprodukte mit Preisen und Lieferantenbezügen verwalten
+- mehrere Lagerorte führen
+- Bestände je Lagerort korrigieren und im Ledger nachverfolgen
+- mehrzeilige Einkaufsbestellungen anlegen
+- Wareneingänge direkt in einen Lagerort einbuchen
+- Verkäufe und Retouren buchen
+- Rollenbasiertes Login für Kasse und Admin
 - PDF- und CSV-Exporte
 
 ## Stack
 
 - Backend: FastAPI, SQLAlchemy, Pydantic v2
 - Datenbank:
-  - lokal standardmaessig SQLite
+  - lokal standardmäßig SQLite
   - in Docker Compose PostgreSQL 16
 - Frontend: React, Vite, TypeScript, TailwindCSS, Recharts
 
@@ -40,8 +54,6 @@ Danach erreichbar:
 - Backend: `http://localhost:8000`
 - API-Doku: `http://localhost:8000/docs`
 
-Compose startet PostgreSQL mit Healthcheck; das Backend wartet auf eine bereite DB.
-
 ### Lokal
 
 Backend:
@@ -55,9 +67,6 @@ pip install -e ".[dev]"
 uvicorn app.main:app --reload --port 8000
 ```
 
-Das Backend verwendet lokal ohne weitere Konfiguration automatisch `sqlite:///./buchhandlung.db`.
-Eine Beispiel-Konfiguration liegt in [src1/backend/.env.example](/home/smooth/code-projects/lagerverwaltung-buchhandlung/src1/backend/.env.example).
-
 Frontend:
 
 ```bash
@@ -66,40 +75,32 @@ npm install
 npm run dev
 ```
 
-## Architektur
-
-Das Backend bleibt absichtlich einfach:
-
-- `app/main.py`: FastAPI-App und HTTP-Endpunkte
-- `app/services/`: Fachlogik
-- `app/api/`: duenne API-Helfer
-- `app/contracts/` und `app/adapters/`: saubere Repository-Grenzen
-- `app/core/bootstrap.py`: DB-Initialisierung, SQLite-Kompatibilitaet und Start-Health
-- `app/db/`: Modelle, Schemas, Session und Seed-SQL
-
-Wichtige Stabilitaetsentscheidungen:
-
-- lokale Standard-DB ist SQLite, damit der Start fuer Mitschueler einfach bleibt
-- Docker Compose nutzt PostgreSQL fuer einen robusteren Demo-/Abgabestand
-- Health-Endpoint prueft auch die DB-Verbindung
-- das Backend startet in Docker ohne `--reload`, damit Startup und DB-Bootstrap nur einmal laufen
-
 ## Wichtige Endpunkte
 
-- `GET /health`
-- `POST /auth/bootstrap-admin`
-- `POST /auth/cashier-login`
-- `POST /auth/admin-login`
-- `GET /books`
-- `GET /movements`
+- `GET /catalog-products`
+- `POST /catalog-products`
+- `GET /warehouses`
+- `GET /stock-items`
+- `POST /stock-adjustments`
+- `GET /stock-ledger`
 - `GET /suppliers`
 - `GET /purchase-orders`
-- `GET /incoming-deliveries`
-- `GET /activity-logs`
-- `GET /reports/inventory-pdf`
-- `GET /export/books`
-- `GET /export/movements`
+- `POST /purchase-orders`
+- `POST /purchase-orders/{order_id}/receive`
+- `GET /sales-orders`
+- `POST /sales-orders`
+- `POST /sales-orders/{order_id}/returns`
+- `GET /reports/stock-pdf`
+- `GET /export/catalog-products`
+- `GET /export/stock-ledger`
 - `GET /export/purchase-orders`
+
+## Authentifizierung
+
+- Bootstrap eines ersten Admins über `POST /auth/bootstrap-admin`
+- Kassierer melden sich per PIN an
+- Admins melden sich per Passwort an
+- Die Kassenliste enthält bewusst nur Benutzer mit Rolle `cashier`
 
 ## Tests
 
@@ -109,14 +110,12 @@ Vom Repo-Root:
 python -m unittest -q src1.backend.tests.test_sqlite_schema
 ```
 
-Oder aus dem Backend-Ordner:
+Frontend-Build:
 
 ```bash
-cd src1/backend
-python -m unittest -q tests.test_sqlite_schema
+cd src1/frontend
+npm run build
 ```
-
-Der Test prueft das frische SQLite-Schema, Seed-Daten und wichtige Constraints.
 
 ## Dokumentation
 
@@ -125,6 +124,7 @@ Der Test prueft das frische SQLite-Schema, Seed-Daten und wichtige Constraints.
 - [docs/architecture.md](/home/smooth/code-projects/lagerverwaltung-buchhandlung/docs/architecture.md)
 - [docs/contracts.md](/home/smooth/code-projects/lagerverwaltung-buchhandlung/docs/contracts.md)
 - [docs/tests.md](/home/smooth/code-projects/lagerverwaltung-buchhandlung/docs/tests.md)
+- [docs/known_issues.md](/home/smooth/code-projects/lagerverwaltung-buchhandlung/docs/known_issues.md)
 
 ## Lizenz
 

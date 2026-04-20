@@ -1,46 +1,36 @@
 # Changelog - Kattner
 
-Persönliches Changelog für Kattner, Rolle: Backend/Integration (FastAPI ↔ React)
+Persönliches Changelog für Kattner, Rolle: Backend/Integration (FastAPI ↔ React).
 
 ---
 
 ## [v0.1] - 2026-03-27
 
 ### Implementiert
-- Backend `src1` lauffähig gemacht und Frontend angebunden (FastAPI + SQLite + React/Vite).
-- SQLAlchemy DB-Session ergänzt (`app/db/session.py`) inkl. `engine`, `SessionLocal`, `get_db`.
-- Konfiguration erweitert: `database_url` mit Default auf SQLite (`sqlite:///./buchhandlung.db`) in `app/core/config.py`.
-- Books-CRUD in `app/api/books.py` umgesetzt (GET/POST/PUT/DELETE).
-- Book-Erstellung verbessert: `id` wird automatisch erzeugt (UUID), `created_at/updated_at` werden automatisch gesetzt; Update setzt `updated_at` neu.
-- Books erweitert um **Autor**:
-  - DB-Spalte `author` im Model ergänzt
-  - SQLite Auto-Migration per `ALTER TABLE ... ADD COLUMN author ...` beim Backend-Start (für bestehende `buchhandlung.db`)
-- Movements-CRUD in `app/api/inventory.py` umgesetzt inkl. Bestandslogik:
-  - Validierung `movement_type` (`IN`, `OUT`, `CORRECTION`)
-  - verhindert negative Bestände
-  - auto `id`/`timestamp`, `book_name` wird ergänzt, Buchbestand wird aktualisiert
-- API-Qualität: Root-Endpoint `GET /` ergänzt sowie `GET /health`.
-- CORS erweitert für lokale Dev-URLs (auch `127.0.0.1`), damit React → API funktioniert.
-- Zusatzendpoint `GET /inventory` für Inventar-Summary (Titel/Units/Low-Stock Liste).
-- Frontend stabilisiert: Vite-Devserver Crash durch kaputtes `lucide-react` sourcemap im Container umgangen (Vite `optimizeDeps.exclude`).
-- Minimale UI-Funktionalität ergänzt, damit man echte Daten anlegen kann:
-  - “Neues Buch” Formular in der Lageransicht
-  - Speichern via `POST /books`, Löschen via `DELETE /books/{id}`, danach Reload der Liste
-  - Formular erweitert um Autor-Feld
-  - Placeholder/Hinweise bei Preis/Bestand verbessert (EUR/Stück)
-- Repo-Hygiene:
-  - `docs/changelog_template.md` → `docs/changelog_kattner.md`
-  - `.gitignore` vereinfacht/erweitert (venv, caches, logs, SQLite `*.db/*.sqlite*`)
+
+- Backend `src1` lauffähig gemacht und Frontend angebunden (FastAPI + SQLite + React/Vite)
+- SQLAlchemy-DB-Session ergänzt (`app/db/session.py`) mit `engine`, `SessionLocal`, `get_db`
+- Konfiguration erweitert: `database_url` mit Default auf SQLite
+- Books-CRUD umgesetzt
+- Autor-Feld für Bücher ergänzt
+- Movements-CRUD mit Bestandslogik umgesetzt
+- Root-Endpoint `GET /` und `GET /health` ergänzt
+- CORS für lokale Dev-URLs erweitert
+- `GET /inventory` für Inventar-Summary ergänzt
+- erste lauffähige UI-Anbindung für Bücher und Lagerbewegungen
 
 ### Tests geschrieben
-- Keine (Fokus lag auf lauffähiger Integration und End-to-End Verbindung).
+
+- Keine (Fokus lag auf lauffähiger Integration und End-to-End-Verbindung)
 
 ### Commits
-```
-- (noch keine Commits in diesem Changelog festgehalten)
+
+```text
+(frühe Grundarbeiten wurden in diesem persönlichen Changelog nicht commitgenau nachgetragen)
 ```
 
 ### Mergekonflikt(e)
+
 - Keine
 
 ---
@@ -48,29 +38,26 @@ Persönliches Changelog für Kattner, Rolle: Backend/Integration (FastAPI ↔ Re
 ## [v0.2] - 2026-04-10
 
 ### Implementiert
-- Backend-Architektur bereinigt und “verständlich” gemacht durch klare Schichten:
-  - `app/contracts/` (Ports als `Protocol`)
-  - `app/adapters/` (SQLAlchemy Repository Implementierungen)
-  - `app/services/` (Use-Cases, inkl. fachlicher Lagerbewegungs-Regeln)
-- Bestehende API-Module `app/api/books.py` und `app/api/inventory.py` so refactored, dass sie nur noch an Services delegieren (thin HTTP layer).
-- Dokumentation an das **tatsächliche** Produkt unter `src1/` angepasst:
-  - Architektur/Contracts beschreiben jetzt FastAPI + SQLAlchemy Setup statt die alte Template-Struktur.
-  - Test-Doku klärt “Template vs aktuelles Produkt” und empfiehlt Struktur für neue Backend-Tests.
-- Repository-Doku modernisiert:
-  - `README.md` auf Docker- und Local-Setup aktualisiert (Backend/Frontend Quickstart).
-  - Index/Workflow/Checklist/Template-Info ergänzt/aktualisiert.
+
+- Backend-Architektur in Contracts, Adapters und Services gegliedert
+- `books.py` und `inventory.py` als dünne HTTP-Schicht refactored
+- Dokumentation an den tatsächlichen Produktstand unter `src1/` angepasst
+- Repository-Metadokumente modernisiert
 
 ### Tests geschrieben
-- Keine neuen Tests (Refactoring + Doku-Konsolidierung).
+
+- Keine neuen Tests
 
 ### Commits
-```
-- 9ea8eda Backend: introduce contracts/adapters/services layering
-- 9b6135b Docs: align architecture/contracts with FastAPI backend
-- 36abd11 Docs: refresh README and repo meta docs
+
+```text
+9ea8eda Backend: introduce contracts/adapters/services layering
+9b6135b Docs: align architecture/contracts with FastAPI backend
+36abd11 Docs: refresh README and repo meta docs
 ```
 
 ### Mergekonflikt(e)
+
 - Keine
 
 ---
@@ -78,44 +65,30 @@ Persönliches Changelog für Kattner, Rolle: Backend/Integration (FastAPI ↔ Re
 ## [v0.3] - 2026-04-18
 
 ### Implementiert
-- Datenbankstruktur für `src1/backend` deutlich verbessert:
-  - neue Tabelle `book_suppliers` für Mehrfach-Lieferanten pro Buch
-  - stärkere Constraints für Mengen/Preise/Status
-  - zusätzliche Indizes für häufige Relationen
-  - Geldfelder auf numerische Typen/sauberere Checks ausgerichtet
-- SQLite-Startlogik/Migration erweitert:
-  - bestehende Datenbanken können die neue Lieferanten-Zuordnung beim Start nachziehen
-  - Seed-SQL an das tatsächliche Schema angepasst
-- Lieferanten-/Bestell-Backend erweitert:
-  - persistente Bestellungen (`purchase_orders`)
-  - persistente Wareneingänge (`incoming_deliveries`)
-  - Zuordnung Buch ↔ Lieferant wird bei Anlage/Update/Wareneingang mitgeführt
-  - Lieferantenbestand nutzt die neue Zuordnungstabelle statt nur `books.supplier_id`
-- Frontend `App.tsx` umfassend überarbeitet:
-  - Bestellungen, Wareneingang, Warenausgang/Verkauf und Lieferantenbereich angepasst
-  - Bestell- und Lieferdaten von lokalem Browser-Storage auf Backend-Persistenz umgestellt
-  - Einbuchungs- und Teil-Liefer-Workflows an neue API-Endpunkte angebunden
-  - mobile Verkaufsansicht ergänzt
-- Contracts-Dokumentation erweitert und an die neue Persistenz-/DB-Struktur angepasst
+
+- Datenbankstruktur für `src1/backend` deutlich verbessert
+- Tabelle `book_suppliers` für Mehrfach-Lieferanten pro Buch ergänzt
+- zusätzliche Constraints und Indizes ergänzt
+- persistente Bestellungen und Wareneingänge eingeführt
+- Frontend für Bestellungen, Wareneingang, Verkauf und Lieferanten überarbeitet
+- Contracts-Dokumentation erweitert
 
 ### Tests geschrieben
-- Neuer SQLite-Schematest für frische DBs und Seed-Daten:
-  - `src1/backend/tests/test_sqlite_schema.py`
-- Test deckt zusätzlich Constraints und Mehrfach-Lieferanten-Zuordnungen ab
+
+- neuer SQLite-Schematest für frische DBs und Seed-Daten
 
 ### Commits
-```
-- c1c4535 Improve database schema
-- 4853888 Improve supplier backend logic
-- ddb986b Update order, supplier and sales views
-```
 
-### Noch offen / nicht committed in diesem Moment
-- `docs/contracts.md` aktualisiert
-- `src1/backend/tests/test_sqlite_schema.py` neu angelegt
-- geplanter Commit-Text dafür: `Add schema test and update docs`
+```text
+c1c4535 Improve database schema
+4853888 Improve supplier backend logic
+ddb986b Update order, supplier and sales views
+9ca0de0 Add schema test and update docs
+54a94b1 Update docs and remove legacy tests
+```
 
 ### Mergekonflikt(e)
+
 - Keine
 
 ---
@@ -123,30 +96,25 @@ Persönliches Changelog für Kattner, Rolle: Backend/Integration (FastAPI ↔ Re
 ## [v0.4] - 2026-04-19
 
 ### Implementiert
-- Backend-Validierung deutlich verbessert:
-  - stärkere Pydantic-v2-Validierung in `src1/backend/app/db/schemas.py`
-  - Pflichtfelder, Mengen, Preise und Statuswerte werden früher abgefangen
-  - optionale Zeitfelder werden auf konsistente ISO-UTC-Werte normalisiert
-- Zeitstempel-Handling vereinheitlicht:
-  - neue Hilfslogik in `src1/backend/app/core/time.py`
-  - Backend verwendet konsistenter UTC-ISO-Zeitstempel statt gemischter Formate
-- Schichtentrennung weiter verbessert:
-  - Lieferanten-, Bestell- und Wareneingangslogik in `src1/backend/app/services/suppliers.py` gebündelt
-  - `src1/backend/app/api/suppliers.py` wieder dünner gemacht
-  - `src1/backend/app/api/inventory.py` per gemeinsamer Service-Fabrik bereinigt
-- Kleine UX-/Fehlerverbesserungen im Frontend:
-  - Währungseinstellung entfernt
-  - freundlichere Fehlermeldungen beim Löschen
-  - Löschbestätigung und Datenansicht-Settings sinnvoller gemacht
+
+- Backend-Validierung deutlich verbessert
+- Zeitstempel-Handling vereinheitlicht
+- Lieferanten-, Bestell- und Wareneingangslogik stärker in Services gebündelt
+- Frontend-UX bei Einstellungen und Fehlermeldungen verbessert
+- Dokumentation zu Validierung und Services ergänzt
 
 ### Tests geschrieben
-- Keine neuen Tests in dieser Runde (bewusst ausgelassen)
+
+- Keine neuen Tests in dieser Runde
 
 ### Commits
-```
-- 89fae0b Improve settings and delete messages
-- 90251c3 Improve backend validation and timestamps
-- acd2c33 Move supplier logic into services
+
+```text
+89fae0b Improve settings and delete messages
+90251c3 Improve backend validation and timestamps
+acd2c33 Move supplier logic into services
+8dcab42 Update docs for validation and services
+0479e0b Polish UI and Docker dev setup
 ```
 
 ---
@@ -154,46 +122,117 @@ Persönliches Changelog für Kattner, Rolle: Backend/Integration (FastAPI ↔ Re
 ## [v0.5] - 2026-04-19
 
 ### Implementiert
-- Repo wieder lauffähig gemacht (Indentation-/Syntax-Fixes in Backend-Modulen).
-- Seed-SQL-Dateiname korrigiert: `buchhadlung.sql` → `buchhandlung.sql` (inkl. Doku/Tests).
-- API-Härtung:
-  - konsistentes Error-Handling über globale Exception-Handler (409 bei Konflikten)
-  - Pagination-Clamp (`offset/limit`, max 100) für Listenendpunkte
-  - Lagerbewegungen als **immutable**: Update/Delete liefert `409 Conflict`, Korrekturen via `CORRECTION`.
-- Frontend-Struktur verbessert:
-  - `MenuButton` extrahiert
-  - globale `ErrorBoundary` eingebaut
-  - `formatCurrency` / `formatDate` Utilities ergänzt
 
-### Dokumentation
-- Quickstart für Backend-venv ergänzt (`pip install -e ".[dev]"`).
-- Known-Issues aktualisiert (npm EACCES, Movement-Immutability).
+- Repo wieder lauffähig gemacht
+- Seed-SQL-Dateiname korrigiert
+- Error-Handling, Pagination und Movement-Immutability gehärtet
+- Frontend-Struktur mit `MenuButton` und `ErrorBoundary` verbessert
+- Build-Probleme und Audit-Themen im Frontend bereinigt
+- Dokumentation zu Setup, Known Issues und Changelog erweitert
 
 ### Commits
-```
-- cae1d3c docs: update README, known issues, and changelog
-- 2e3118a backend: stabilize API errors, pagination, and immutability
-- 562d929 frontend: split features and add error boundary
-- c86f89d frontend: fix build and apply audit updates
-- 7495a2d docs: clarify setup and add datetime migration plan
-- e292840 backend: add datetime columns and migrate on startup
-- 2b8f857 docs: drop datetime migration plan after implementation
+
+```text
+cae1d3c docs: update README, known issues, and changelog
+2e3118a backend: stabilize API errors, pagination, and immutability
+562d929 frontend: split features and add error boundary
+c86f89d frontend: fix build and apply audit updates
+7495a2d docs: clarify setup and add datetime migration plan
+e292840 backend: add datetime columns and migrate on startup
+2b8f857 docs: drop datetime migration plan after implementation
+531d08e docs: update Kattner changelog for v0.5 commits
 ```
 
 ### Mergekonflikt(e)
+
 - Keine
+
+---
+
+## [v0.6] - 2026-04-19 bis 2026-04-20
+
+### Implementiert
+
+- rollenbasiertes Login mit Admin- und Kassenfluss ergänzt
+- Login-Screen und Admin-Verwaltung im Frontend aufgebaut
+- Aktivitäts-Log und Demo-Daten-Flows ergänzt
+- Arbeitsbereiche für Katalog, Lager, Bestellung und Verkauf weiter ausgebaut
+- größere Commerce- und Auth-Erweiterungen integriert
+
+### Commits
+
+```text
+eae2fee backend: add staff login and role-based auth
+2d790f7 frontend: add staff login screen and bearer auth
+e3a3ed8 backend: fix datetime writes and attribute actions to staff
+1725e59 frontend: fix sales page table header styles
+61f9c37 Add demo data seeding and activity logging
+956695c Restructure catalog, inventory, and cashier workspace
+6270de5 Add commerce backend and staff auth platform
+62c0327 Add staff login and admin management frontend
+```
+
+---
+
+## [v0.7] - 2026-04-20
+
+### Implementiert
+
+- Backend-Start und Datenbank-Bootstrap stabilisiert
+- Legacy-Auth-Pfad entfernt
+- Frontend-Bestell- und Settings-Flows vereinfacht
+- Repo-Defaults und Dokumentation für die Abgabe bereinigt
+
+### Commits
+
+```text
+13bac23 Stabilize backend startup and remove legacy auth path
+87b49d2 Simplify frontend ordering and settings flows
+eab8d48 Refresh docs and repository defaults for submission
+```
+
+### Bedeutung für die Abgabe
+
+- vor der finalen Abgabe wurde bewusst vereinfacht statt weiter ausgebaut
+- unnötige Redundanz wurde entfernt
+- Start, Doku und Produktumfang wurden auf einen besser erklärbaren Stand gebracht
+
+---
+
+## [v0.8] - 2026-04-20
+
+### Implementiert
+
+- vollständigen Wechsel vom alten Buch-/Bestandsmodell auf getrennten Katalog-, Lagerort- und Ledger-Stack umgesetzt
+- neues Schema mit `catalog_products`, `warehouses`, `stock_items`, `stock_ledger_entries` und `product_suppliers` produktiv gemacht
+- Einkauf auf mehrzeilige `purchase_orders_v2` umgestellt
+- Verkauf und Retouren an den neuen Lagerort-Bestand angebunden
+- Frontend sichtbar auf Katalog, Bestände & Ledger, Einkauf, Wareneingang und Verkauf je Lagerort umgebaut
+
+### Commits
+
+```text
+8221e57 Refactor database bootstrap to catalog stock and ledger model
+5692a5d Migrate frontend to catalog warehouse stock and purchase order flows
+```
+
+### Bedeutung für die Abgabe
+
+- kein paralleles Altmodell mehr im Produktkern
+- neue Fachsprache ist in Datenbank, Backend und UI konsistent
+- das Projekt ist dadurch besser erklärbar und näher an einer sauberen Lagerarchitektur
 
 ---
 
 ## Zusammenfassung
 
-**Gesamt implementierte Features:** Backend-CRUD + DB-Session + SQLite + CORS + Root/Health + Inventory-Summary + Service/Adapter-Struktur + persistente Bestell-/Wareneingangslogik + Mehrfach-Lieferanten im DB-Modell + breiter UI-Ausbau fuer Bestellung/Wareneingang/Verkauf/Lieferanten + stärkere Validierung und sauberere Service-Grenzen  
-**Gesamt geschriebene Tests:** 1 neuer SQLite-Schematest  
-**Gesamt Commits:** 9 erfasst  
-**Größte Herausforderung:** Datenmodell zwischen Frontend, API und SQLite konsistent weiterentwickeln, ohne den bestehenden `src1`-Flow zu zerbrechen.  
-**Schönste Code-Zeile:** automatische Pflege der Buch-Lieferanten-Zuordnung beim Persistieren statt reiner Einzel-FK-Logik.
+**Gesamt implementierte Schwerpunkte:** getrenntes Katalog-/Stock-/Ledger-Modell, Multi-Warehouse-Bestand, SQLite/PostgreSQL-Setup, rollenbasierte Authentifizierung, mehrzeilige Einkaufsbestellungen, Wareneingang je Lagerort, Verkauf und Retouren, Aktivitäts-Log, UI für Katalog, Lager, Einkauf, Wareneingang, Verkauf, Lieferanten und Administration  
+**Gesamt geschriebene Tests:** 1 produktiver SQLite-Schematest  
+**Gesamt erfasste Commits in diesem Changelog:** 34  
+**Größte Herausforderung:** Das Datenmodell zwischen Frontend, API und Persistenz konsistent weiterzuentwickeln, ohne den bestehenden `src1`-Flow zu zerbrechen  
+**Schönste Code-Idee:** Die automatische Pflege der Buch-Lieferanten-Zuordnung beim Persistieren statt reiner Einzel-FK-Logik
 
 ---
 
 **Changelog erstellt von:** Kattner  
-**Letzte Aktualisierung:** 2026-04-19
+**Letzte Aktualisierung:** 2026-04-20
