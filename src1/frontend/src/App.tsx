@@ -270,6 +270,7 @@ export default function Dashboard() {
     : "min-h-screen bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.14),_transparent_38%),linear-gradient(180deg,#f8fbff_0%,#eef4ff_100%)] text-gray-900";
   const sidebar = dark ? "border-gray-800 bg-gray-950/60" : "border-gray-200 bg-white/90";
   const mutedText = dark ? "text-gray-400" : "text-gray-500";
+  const isPosMode = !isAdmin && page === "verkauf";
 
   if (authChecking) {
     return <div className={`${shell} flex min-h-screen items-center justify-center text-sm`}>Prüfe Sitzung...</div>;
@@ -301,8 +302,8 @@ export default function Dashboard() {
 
   return (
     <div className={shell}>
-      <div className="mx-auto flex min-h-screen max-w-[1760px] gap-4 p-4 lg:p-6">
-        <aside className={`hidden w-[24rem] shrink-0 rounded-[2rem] border p-6 lg:flex lg:flex-col ${sidebar}`}>
+      <div className={`mx-auto flex min-h-screen gap-4 p-4 lg:p-6 ${isPosMode ? "max-w-[1920px]" : "max-w-[1760px]"}`}>
+        <aside className={`hidden w-[24rem] shrink-0 rounded-[2rem] border p-6 lg:flex lg:flex-col ${sidebar} ${isPosMode ? "lg:hidden" : ""}`}>
           <div>
             <h1 className="text-[2.15rem] font-semibold leading-[1.1] tracking-[-0.02em]">Buchhandlungsverwaltung</h1>
             <p className={`mt-4 max-w-sm text-sm leading-6 ${mutedText}`}>Katalog, Lagerorte, Lieferanten, Einkauf und Verkauf in einer klaren Oberfläche.</p>
@@ -317,13 +318,13 @@ export default function Dashboard() {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col gap-4">
-          <header className={`flex items-center justify-between gap-4 p-4 ${topBarCard}`}>
+          <header className={`flex items-center justify-between gap-4 p-4 ${isPosMode ? "rounded-[1.5rem] border border-cyan-500/20 bg-gray-950/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]" : topBarCard}`}>
             <div className="flex min-w-0 items-center gap-3">
-              <Button variant="outline" size="icon" className="lg:hidden" onClick={() => setMobileNavOpen((value) => !value)}>
+              <Button variant="outline" size="icon" className={isPosMode ? "" : "lg:hidden"} onClick={() => setMobileNavOpen((value) => !value)}>
                 <Menu size={18} />
               </Button>
               <div className="min-w-0">
-                <div className="truncate text-xl font-semibold">{PAGE_TITLES[page]}</div>
+                <div className={`truncate font-semibold ${isPosMode ? "text-2xl" : "text-xl"}`}>{PAGE_TITLES[page]}</div>
                 <div className={`truncate text-sm ${mutedText}`}>{PAGE_DESCRIPTIONS[page]}</div>
               </div>
             </div>
@@ -331,12 +332,13 @@ export default function Dashboard() {
               <div className={`rounded-full px-3 py-2 text-sm ${dark ? "bg-gray-900/80 text-gray-200" : "bg-white text-gray-700 shadow-sm"}`}>
                 {me.displayName}
               </div>
-              <Button variant="outline" onClick={() => setDark((value) => !value)}>
+              <Button variant="outline" className={isPosMode ? "h-11 px-4" : ""} onClick={() => setDark((value) => !value)}>
                 {dark ? <Sun size={15} className="mr-2" /> : <Moon size={15} className="mr-2" />}
                 {dark ? "Hell" : "Dunkel"}
               </Button>
               <Button
                 variant="outline"
+                className={isPosMode ? "h-11 px-4" : ""}
                 onClick={() => {
                   setAuthToken(null);
                   setMe(null);
@@ -348,7 +350,7 @@ export default function Dashboard() {
             </div>
           </header>
 
-          {mobileNavOpen ? (
+          {mobileNavOpen && !isPosMode ? (
             <div className={`grid gap-2 rounded-[2rem] border p-4 lg:hidden ${sidebar}`}>
               {navItems.map((item) => (
                 <MenuButton
@@ -417,12 +419,13 @@ export default function Dashboard() {
           ) : null}
           {page === "verkauf" ? (
             <GoodsOutPage
-              card={card}
+              card={isPosMode ? "" : card}
               dark={dark}
               products={products}
               warehouses={warehouses}
               stockEntries={stockEntries}
               salesOrders={salesOrders}
+              posMode={isPosMode}
               reloadStockEntries={reloadStockEntries}
               reloadLedgerEntries={reloadLedgerEntries}
               reloadSalesOrders={reloadSalesOrders}
