@@ -331,11 +331,20 @@ export type SaleOrder = {
   discounts: AppliedDiscount[];
 };
 
+export type CartLine = {
+  productId: string;
+  sku: string;
+  title: string;
+  unitPrice: number;
+  quantity: number;
+  availableStock: number;
+};
+
 export type SaleDraft = {
   warehouseCode: string;
-  productId: string;
-  quantity: string;
+  lines: CartLine[];
   customDiscountAmount: string;
+  customDiscountType: "FIXED" | "PERCENT";
   isFirstCustomer: boolean;
 };
 
