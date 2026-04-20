@@ -3,6 +3,7 @@ import { useState } from "react";
 import { apiPost } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { LocationAutocomplete } from "@/features/locations/LocationAutocomplete";
 import type { Supplier, SupplierDraft } from "@/types";
 
 interface SuppliersPageProps {
@@ -56,7 +57,6 @@ export function SuppliersPage({ card, dark, suppliers, reloadSuppliers }: Suppli
         location_source: "manual",
         location_source_id: "",
         notes: draft.notes.trim() || null,
-        created_at: null,
       });
       setDraft({
         name: "",
@@ -89,7 +89,27 @@ export function SuppliersPage({ card, dark, suppliers, reloadSuppliers }: Suppli
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <input className={formInputClass} placeholder="Name *" value={draft.name} onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value }))} />
             <input className={formInputClass} placeholder="Kontakt" value={draft.contact} onChange={(e) => setDraft((prev) => ({ ...prev, contact: e.target.value }))} />
-            <input className={formInputClass} placeholder="Standortname" value={draft.locationDisplayName} onChange={(e) => setDraft((prev) => ({ ...prev, locationDisplayName: e.target.value }))} />
+            <LocationAutocomplete
+              dark={dark}
+              label="Ort suchen (z. B. Mariahilfer Straße 100 Wien)"
+              value={draft.locationDisplayName}
+              onChange={(value) => setDraft((prev) => ({ ...prev, locationDisplayName: value }))}
+              onSelect={(location) =>
+                setDraft((prev) => ({
+                  ...prev,
+                  address: [location.street, location.houseNumber, location.postcode, location.city, location.country].filter(Boolean).join(", "),
+                  locationDisplayName: location.displayName,
+                  locationStreet: location.street,
+                  locationHouseNumber: location.houseNumber,
+                  locationPostcode: location.postcode,
+                  locationCity: location.city,
+                  locationState: location.state,
+                  locationCountry: location.country,
+                  locationLat: location.lat,
+                  locationLon: location.lon,
+                }))
+              }
+            />
             <input className={formInputClass} placeholder="Straße" value={draft.locationStreet} onChange={(e) => setDraft((prev) => ({ ...prev, locationStreet: e.target.value }))} />
             <input className={formInputClass} placeholder="Hausnummer" value={draft.locationHouseNumber} onChange={(e) => setDraft((prev) => ({ ...prev, locationHouseNumber: e.target.value }))} />
             <input className={formInputClass} placeholder="PLZ" value={draft.locationPostcode} onChange={(e) => setDraft((prev) => ({ ...prev, locationPostcode: e.target.value }))} />
@@ -119,6 +139,11 @@ export function SuppliersPage({ card, dark, suppliers, reloadSuppliers }: Suppli
                       ? [supplier.location_postcode, supplier.location_city, supplier.location_country].filter(Boolean).join(" · ")
                       : "Keine Ortsdaten hinterlegt"}
                   </p>
+                  {supplier.location_lat && supplier.location_lon ? (
+                    <p className={`mt-1 text-[11px] ${dark ? "text-gray-500" : "text-gray-500"}`}>
+                      Koordinaten: {supplier.location_lat}, {supplier.location_lon}
+                    </p>
+                  ) : null}
                   {supplier.notes ? <p className="mt-2 text-xs italic">{supplier.notes}</p> : null}
                 </CardContent>
               </Card>

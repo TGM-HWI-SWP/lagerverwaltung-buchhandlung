@@ -95,3 +95,17 @@ class SupplierCreateRequest(LocationFieldsMixin):
     def normalize_optional_notes(cls, value: str | None) -> str | None:
         normalized = (value or "").strip()
         return normalized or None
+
+
+class LocationSearchResultSchema(BaseModel):
+    display_name: str = ""
+    street: str = ""
+    house_number: str = ""
+    postcode: str = ""
+    city: str = ""
+    state: str = ""
+    country: str = ""
+    lat: str = ""
+    lon: str = ""
+    source: str = "nominatim"
+    source_id: str = ""

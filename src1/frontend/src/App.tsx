@@ -390,6 +390,7 @@ export default function Dashboard() {
               warehouses={warehouses}
               loading={loadingData}
               error={dataError}
+              reloadWarehouses={reloadWarehouses}
               reloadStockEntries={reloadStockEntries}
               reloadLedgerEntries={reloadLedgerEntries}
             />

@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { apiPost } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { LocationAutocomplete } from "@/features/locations/LocationAutocomplete";
 import type { AppSettings, CatalogProduct, StockEntry, StockLedgerEntry, Warehouse } from "@/types";
 
 interface InventoryPageProps {
@@ -15,6 +16,7 @@ interface InventoryPageProps {
   warehouses: Warehouse[];
   loading: boolean;
   error: string | null;
+  reloadWarehouses: () => Promise<void>;
   reloadStockEntries: () => Promise<void>;
   reloadLedgerEntries: () => Promise<void>;
 }
@@ -29,6 +31,7 @@ export function InventoryPage({
   warehouses,
   loading,
   error,
+  reloadWarehouses,
   reloadStockEntries,
   reloadLedgerEntries,
 }: InventoryPageProps) {
@@ -39,6 +42,21 @@ export function InventoryPage({
   const [reason, setReason] = useState("Bestandskorrektur");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [creatingWarehouse, setCreatingWarehouse] = useState(false);
+  const [warehouseError, setWarehouseError] = useState<string | null>(null);
+  const [warehouseDraft, setWarehouseDraft] = useState({
+    code: "",
+    name: "",
+    locationDisplayName: "",
+    locationStreet: "",
+    locationHouseNumber: "",
+    locationPostcode: "",
+    locationCity: "",
+    locationState: "",
+    locationCountry: "",
+    locationLat: "",
+    locationLon: "",
+  });
 
   const inputClass = dark
     ? "w-full rounded-2xl border border-gray-700 bg-gray-950 px-4 py-3 text-sm text-white placeholder:text-gray-400"
@@ -79,6 +97,46 @@ export function InventoryPage({
     }
   };
 
+  const createWarehouse = async () => {
+    setCreatingWarehouse(true);
+    setWarehouseError(null);
+    try {
+      await apiPost("/warehouses", {
+        code: warehouseDraft.code.trim(),
+        name: warehouseDraft.name.trim(),
+        location_display_name: warehouseDraft.locationDisplayName.trim(),
+        location_street: warehouseDraft.locationStreet.trim(),
+        location_house_number: warehouseDraft.locationHouseNumber.trim(),
+        location_postcode: warehouseDraft.locationPostcode.trim(),
+        location_city: warehouseDraft.locationCity.trim(),
+        location_state: warehouseDraft.locationState.trim(),
+        location_country: warehouseDraft.locationCountry.trim(),
+        location_lat: warehouseDraft.locationLat.trim(),
+        location_lon: warehouseDraft.locationLon.trim(),
+        location_source: "manual",
+        location_source_id: "",
+      });
+      setWarehouseDraft({
+        code: "",
+        name: "",
+        locationDisplayName: "",
+        locationStreet: "",
+        locationHouseNumber: "",
+        locationPostcode: "",
+        locationCity: "",
+        locationState: "",
+        locationCountry: "",
+        locationLat: "",
+        locationLon: "",
+      });
+      await reloadWarehouses();
+    } catch (err) {
+      setWarehouseError(err instanceof Error ? err.message : "Lagerort konnte nicht angelegt werden.");
+    } finally {
+      setCreatingWarehouse(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card className={card}>
@@ -99,7 +157,7 @@ export function InventoryPage({
               <option value="">Alle Lagerorte</option>
               {warehouses.map((warehouse) => (
                 <option key={warehouse.id} value={warehouse.code}>
-                  {warehouse.code} · {warehouse.name}
+                  {warehouse.code} · {warehouse.name} · {[warehouse.locationCity, warehouse.locationCountry].filter(Boolean).join(", ")}
                 </option>
               ))}
             </select>
@@ -136,6 +194,48 @@ export function InventoryPage({
             {saveError ? <p className="mt-3 text-sm text-red-400">{saveError}</p> : null}
           </div>
 
+          <div className={`mt-5 rounded-3xl border p-4 ${dark ? "border-gray-800 bg-gray-950/60" : "border-gray-200 bg-gray-50"}`}>
+            <h3 className="text-lg font-semibold">Lagerort anlegen</h3>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <input className={inputClass} placeholder="Code *" value={warehouseDraft.code} onChange={(e) => setWarehouseDraft((prev) => ({ ...prev, code: e.target.value.toUpperCase() }))} />
+              <input className={inputClass} placeholder="Name *" value={warehouseDraft.name} onChange={(e) => setWarehouseDraft((prev) => ({ ...prev, name: e.target.value }))} />
+              <LocationAutocomplete
+                dark={dark}
+                label="Standort suchen"
+                value={warehouseDraft.locationDisplayName}
+                onChange={(value) => setWarehouseDraft((prev) => ({ ...prev, locationDisplayName: value }))}
+                onSelect={(location) =>
+                  setWarehouseDraft((prev) => ({
+                    ...prev,
+                    locationDisplayName: location.displayName,
+                    locationStreet: location.street,
+                    locationHouseNumber: location.houseNumber,
+                    locationPostcode: location.postcode,
+                    locationCity: location.city,
+                    locationState: location.state,
+                    locationCountry: location.country,
+                    locationLat: location.lat,
+                    locationLon: location.lon,
+                  }))
+                }
+              />
+              <input className={inputClass} placeholder="Straße" value={warehouseDraft.locationStreet} onChange={(e) => setWarehouseDraft((prev) => ({ ...prev, locationStreet: e.target.value }))} />
+              <input className={inputClass} placeholder="Hausnummer" value={warehouseDraft.locationHouseNumber} onChange={(e) => setWarehouseDraft((prev) => ({ ...prev, locationHouseNumber: e.target.value }))} />
+              <input className={inputClass} placeholder="PLZ" value={warehouseDraft.locationPostcode} onChange={(e) => setWarehouseDraft((prev) => ({ ...prev, locationPostcode: e.target.value }))} />
+              <input className={inputClass} placeholder="Stadt *" value={warehouseDraft.locationCity} onChange={(e) => setWarehouseDraft((prev) => ({ ...prev, locationCity: e.target.value }))} />
+              <input className={inputClass} placeholder="Bundesland/Region" value={warehouseDraft.locationState} onChange={(e) => setWarehouseDraft((prev) => ({ ...prev, locationState: e.target.value }))} />
+              <input className={inputClass} placeholder="Land *" value={warehouseDraft.locationCountry} onChange={(e) => setWarehouseDraft((prev) => ({ ...prev, locationCountry: e.target.value }))} />
+              <input className={inputClass} placeholder="Breitengrad" value={warehouseDraft.locationLat} onChange={(e) => setWarehouseDraft((prev) => ({ ...prev, locationLat: e.target.value }))} />
+              <input className={inputClass} placeholder="Längengrad" value={warehouseDraft.locationLon} onChange={(e) => setWarehouseDraft((prev) => ({ ...prev, locationLon: e.target.value }))} />
+            </div>
+            <div className="mt-3 flex items-center gap-3">
+              <Button onClick={createWarehouse} disabled={creatingWarehouse || warehouseDraft.code.trim() === "" || warehouseDraft.name.trim() === "" || warehouseDraft.locationCity.trim() === "" || warehouseDraft.locationCountry.trim() === ""}>
+                {creatingWarehouse ? "Speichere..." : "Lagerort anlegen"}
+              </Button>
+              {warehouseError ? <span className="text-sm text-red-400">{warehouseError}</span> : null}
+            </div>
+          </div>
+
           {loading ? <p className={`mt-4 text-sm ${mutedText}`}>Lade Bestände...</p> : null}
           {error ? <p className="mt-4 text-sm text-red-400">Fehler: {error}</p> : null}
 
@@ -157,7 +257,7 @@ export function InventoryPage({
                   {filteredEntries.map((entry) => (
                     <tr key={`${entry.productId}-${entry.warehouseCode}`} className={`border-b ${tableBorder} last:border-b-0`}>
                       <td className="py-3 font-medium">{entry.title}</td>
-                      <td>{entry.warehouseCode}</td>
+                      <td>{warehouses.find((warehouse) => warehouse.code === entry.warehouseCode)?.locationDisplayName || entry.warehouseCode}</td>
                       <td className="font-mono text-xs">{entry.sku}</td>
                       <td className={entry.onHand <= Math.max(settings.lowStockThreshold, entry.reorderPoint) ? "text-amber-400" : ""}>{entry.onHand}</td>
                       <td>{entry.reserved}</td>

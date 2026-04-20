@@ -14,10 +14,11 @@ from app.core.auth_staff import hash_password, hash_pin, require_admin, require_
 from app.core.bootstrap import get_database_health, initialize_application
 from app.core.config import settings
 from app.core.errors import install_error_handlers
+from app.core.location_search import search_locations
 from app.db.models import Supplier
 from app.db.models_auth import StaffUser
 from app.db.models_commerce import CatalogProduct, PurchaseOrderV2Line, SalesOrder, StockItem, StockLedgerEntry, Warehouse
-from app.db.schemas import SupplierCreateRequest, SupplierSchema
+from app.db.schemas import LocationSearchResultSchema, SupplierCreateRequest, SupplierSchema
 from app.db.schemas_auth import (
     AdminLoginRequest,
     BootstrapAdminRequest,
@@ -329,6 +330,15 @@ def update_warehouse(
         return _service(db).update_warehouse(warehouse_id, payload)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/locations/search", response_model=list[LocationSearchResultSchema])
+def location_search(
+    q: str = Query(..., min_length=3),
+    limit: int = Query(5, ge=1, le=5),
+    user=Depends(require_admin),
+):
+    return [LocationSearchResultSchema(**row.__dict__) for row in search_locations(q, limit=limit)]
 
 
 @app.get("/stock-items", response_model=list[StockEntrySchema])

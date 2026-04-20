@@ -3,6 +3,8 @@ import type {
   AppliedDiscountApi,
   CatalogProduct,
   CatalogProductApi,
+  LocationSuggestion,
+  LocationSuggestionApi,
   ProductSupplierLink,
   ProductSupplierLinkApi,
   PurchaseOrder,
@@ -34,6 +36,22 @@ export function mapCatalogProductApi(product: CatalogProductApi): CatalogProduct
     reorderPoint: product.reorder_point,
     createdAt: product.created_at ?? null,
     updatedAt: product.updated_at ?? null,
+  };
+}
+
+export function mapLocationSuggestionApi(location: LocationSuggestionApi): LocationSuggestion {
+  return {
+    displayName: location.display_name,
+    street: location.street,
+    houseNumber: location.house_number,
+    postcode: location.postcode,
+    city: location.city,
+    state: location.state,
+    country: location.country,
+    lat: location.lat,
+    lon: location.lon,
+    source: location.source,
+    sourceId: location.source_id,
   };
 }
 

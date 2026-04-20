@@ -64,6 +64,34 @@ export type LocationFields = {
   locationSourceId: string;
 };
 
+export type LocationSuggestionApi = {
+  display_name: string;
+  street: string;
+  house_number: string;
+  postcode: string;
+  city: string;
+  state: string;
+  country: string;
+  lat: string;
+  lon: string;
+  source: string;
+  source_id: string;
+};
+
+export type LocationSuggestion = {
+  displayName: string;
+  street: string;
+  houseNumber: string;
+  postcode: string;
+  city: string;
+  state: string;
+  country: string;
+  lat: string;
+  lon: string;
+  source: string;
+  sourceId: string;
+};
+
 export type WarehouseApi = LocationFieldsApi & {
   id: string;
   code: string;
