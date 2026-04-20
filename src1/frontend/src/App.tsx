@@ -301,51 +301,55 @@ export default function Dashboard() {
   ].filter((item) => !item.adminOnly || isAdmin);
 
   return (
-    <div className={shell}>
-      <div className={`mx-auto flex min-h-screen gap-4 p-4 lg:p-6 ${isPosMode ? "max-w-[1820px]" : "max-w-[1760px]"}`}>
-        <aside className={`hidden w-[24rem] shrink-0 rounded-[2rem] border p-6 lg:flex lg:flex-col ${sidebar} ${isPosMode ? "lg:hidden" : ""}`}>
-          <div>
-            <h1 className="text-[2.15rem] font-semibold leading-[1.1] tracking-[-0.02em]">Buchhandlungsverwaltung</h1>
-            <p className={`mt-4 max-w-sm text-sm leading-6 ${mutedText}`}>Katalog, Lagerorte, Lieferanten, Einkauf und Verkauf in einer klaren Oberfläche.</p>
-          </div>
-          <nav className="mt-8 flex flex-col gap-2">
-            {navItems.map((item) => (
-              <MenuButton key={item.key} icon={item.icon} active={page === item.key} onClick={() => setPage(item.key)}>
-                {item.label}
-              </MenuButton>
-            ))}
-          </nav>
-        </aside>
+    <div className={`${shell} ${isPosMode ? "h-screen overflow-hidden" : ""}`}>
+      <div className={`mx-auto flex gap-4 p-4 lg:p-6 ${isPosMode ? "h-full max-w-[1920px] flex-col" : "min-h-screen max-w-[1760px] flex-row"}`}>
+        {!isPosMode && (
+          <aside className={`hidden w-[24rem] shrink-0 rounded-[2rem] border p-6 lg:flex lg:flex-col ${sidebar}`}>
+            <div>
+              <h1 className="text-[2.15rem] font-semibold leading-[1.1] tracking-[-0.02em]">Buchhandlung</h1>
+              <p className={`mt-4 max-w-sm text-sm leading-6 ${mutedText}`}>Katalog, Lagerorte, Lieferanten, Einkauf und Verkauf in einer klaren Oberfläche.</p>
+            </div>
+            <nav className="mt-8 flex flex-col gap-2">
+              {navItems.map((item) => (
+                <MenuButton key={item.key} icon={item.icon} active={page === item.key} onClick={() => setPage(item.key)}>
+                  {item.label}
+                </MenuButton>
+              ))}
+            </nav>
+          </aside>
+        )}
 
-        <div className="flex min-w-0 flex-1 flex-col gap-4">
-          <header className={`flex items-center justify-between gap-4 p-4 ${isPosMode ? "rounded-[1.5rem] border border-cyan-500/20 bg-gray-950/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]" : topBarCard}`}>
+        <div className={`flex min-w-0 flex-col gap-4 ${isPosMode ? "flex-1 overflow-hidden" : "flex-1"}`}>
+          <header className={`flex shrink-0 items-center justify-between gap-4 p-4 ${isPosMode ? "rounded-[1.5rem] border border-cyan-500/20 bg-gray-950/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]" : topBarCard}`}>
             <div className="flex min-w-0 items-center gap-3">
-              <Button variant="outline" size="icon" className={isPosMode ? "" : "lg:hidden"} onClick={() => setMobileNavOpen((value) => !value)}>
-                <Menu size={18} />
-              </Button>
+              {!isPosMode && (
+                <Button variant="outline" size="icon" className="lg:hidden" onClick={() => setMobileNavOpen((value) => !value)}>
+                  <Menu size={18} />
+                </Button>
+              )}
               <div className="min-w-0">
-                <div className={`truncate font-semibold ${isPosMode ? "text-2xl" : "text-xl"}`}>{PAGE_TITLES[page]}</div>
-                <div className={`truncate text-sm ${mutedText}`}>{PAGE_DESCRIPTIONS[page]}</div>
+                <div className={`truncate font-semibold ${isPosMode ? "text-xl" : "text-xl"}`}>{PAGE_TITLES[page]}</div>
+                {!isPosMode && <div className={`truncate text-sm ${mutedText}`}>{PAGE_DESCRIPTIONS[page]}</div>}
               </div>
             </div>
-            <div className="hidden items-center gap-2 sm:flex">
+            <div className="flex items-center gap-2">
               <div className={`rounded-full px-3 py-2 text-sm ${dark ? "bg-gray-900/80 text-gray-200" : "bg-white text-gray-700 shadow-sm"}`}>
                 {me.displayName}
               </div>
-              <Button variant="outline" className={isPosMode ? "h-11 px-4" : ""} onClick={() => setDark((value) => !value)}>
-                {dark ? <Sun size={15} className="mr-2" /> : <Moon size={15} className="mr-2" />}
-                {dark ? "Hell" : "Dunkel"}
+              <Button variant="outline" className={isPosMode ? "h-9 px-3 text-sm" : ""} onClick={() => setDark((value) => !value)}>
+                {dark ? <Sun size={15} className={isPosMode ? "" : "mr-2"} /> : <Moon size={15} className={isPosMode ? "" : "mr-2"} />}
+                {!isPosMode && (dark ? "Hell" : "Dunkel")}
               </Button>
               <Button
                 variant="outline"
-                className={isPosMode ? "h-11 px-4" : ""}
+                className={isPosMode ? "h-9 px-3 text-sm" : ""}
                 onClick={() => {
                   setAuthToken(null);
                   setMe(null);
                 }}
               >
-                <LogOut size={15} className="mr-2" />
-                Abmelden
+                <LogOut size={15} className={isPosMode ? "" : "mr-2"} />
+                {!isPosMode && "Abmelden"}
               </Button>
             </div>
           </header>
