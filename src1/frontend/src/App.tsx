@@ -68,7 +68,6 @@ const DEFAULT_SETTINGS: AppSettings = {
   confirmDelete: true,
   autoRefresh: false,
   autoRefreshSeconds: 30,
-  loadDemoData: true,
 };
 
 const SETTINGS_STORAGE_KEY = "bookmanager.settings";
@@ -117,7 +116,6 @@ export default function Dashboard() {
   const [me, setMe] = useState<Me | null>(null);
   const [demoDataBusy, setDemoDataBusy] = useState(false);
   const [demoDataStatus, setDemoDataStatus] = useState<string | null>(null);
-  const [autoDemoSeeded, setAutoDemoSeeded] = useState(false);
   const [settings, setSettings] = useState<AppSettings>(() => {
     try {
       const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
@@ -319,16 +317,6 @@ export default function Dashboard() {
       setDemoDataBusy(false);
     }
   };
-
-  useEffect(() => {
-    if (!isAdmin || !settings.loadDemoData || autoDemoSeeded || loadingBooks || demoDataBusy) return;
-    if (books.length > 0) {
-      setAutoDemoSeeded(true);
-      return;
-    }
-    setAutoDemoSeeded(true);
-    seedDemoData();
-  }, [isAdmin, settings.loadDemoData, autoDemoSeeded, loadingBooks, demoDataBusy, books.length]);
 
   if (authChecking) {
     return <div className={container + " flex min-h-screen items-center justify-center"}>Sitzung wird geladen...</div>;

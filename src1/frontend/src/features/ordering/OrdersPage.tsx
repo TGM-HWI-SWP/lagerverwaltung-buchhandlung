@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import type { Book, NewBookDraft, ReorderDraft, PurchaseOrder, Supplier, IncomingDelivery, BookApi, CatalogProduct } from "@/types";
+import type { Book, NewBookDraft, ReorderDraft, PurchaseOrder, Supplier, IncomingDelivery, BookApi } from "@/types";
 import { mapDraftToBookPayload, mapPurchaseOrderApiToOrder, mapIncomingDeliveryApi, mapBookApiToBook } from "@/lib/mappers";
-import { apiGet, apiPost } from "@/api/client";
+import { apiPost } from "@/api/client";
 
 interface OrdersPageProps {
   card: string;
@@ -73,53 +73,15 @@ export function OrdersPage({
     [orders],
   );
 
-  const isMethodNotAllowed = (error: unknown): boolean => {
-    if (!(error instanceof Error)) return false;
-    return error.message.includes("405") || error.message.toLowerCase().includes("method not allowed");
-  };
-
-  const createPurchaseOrderWithFallback = async (payload: {
+  const createPurchaseOrder = async (payload: {
     supplier_id: string;
     book_id: string;
     book_name: string;
     book_sku: string;
     unit_price: number;
     quantity: number;
-  }): Promise<PurchaseOrder | null> => {
-    try {
-      return await apiPost<PurchaseOrder, typeof payload>("/purchase-orders", payload);
-    } catch (error) {
-      if (!isMethodNotAllowed(error)) throw error;
-      let productId = payload.book_id;
-      const catalog = await apiGet<CatalogProduct[]>("/catalog/products", { include_inactive: true });
-      const existingProduct = catalog.find((entry) => entry.sku === payload.book_sku.trim());
-      if (existingProduct) {
-        productId = existingProduct.id;
-      } else {
-        const createdProduct = await apiPost<CatalogProduct, { sku: string; title: string; author: string; description: string; category: string; selling_price: number; reorder_point: number }>(
-          "/catalog/products",
-          {
-            sku: payload.book_sku.trim(),
-            title: payload.book_name.trim(),
-            author: "",
-            description: "",
-            category: "",
-            selling_price: payload.unit_price,
-            reorder_point: 0,
-          },
-        );
-        productId = createdProduct.id;
-      }
-      await apiPost<unknown, { supplier_id: string; notes: string; lines: Array<{ product_id: string; quantity: number; unit_cost: number }> }>(
-        "/purchase-orders-v2",
-        {
-          supplier_id: payload.supplier_id,
-          notes: "",
-          lines: [{ product_id: productId, quantity: Math.round(payload.quantity), unit_cost: payload.unit_price }],
-        },
-      );
-      return null;
-    }
+  }): Promise<PurchaseOrder> => {
+    return apiPost<PurchaseOrder, typeof payload>("/purchase-orders", payload);
   };
 
   useEffect(() => {
@@ -156,7 +118,7 @@ export function OrdersPage({
       if (initialOrderQuantity > 0) {
         try {
           const initialUnitPrice = Number(bookDraft.purchasePrice) > 0 ? Number(bookDraft.purchasePrice) : createdBook.purchasePrice;
-          const createdOrder = await createPurchaseOrderWithFallback({
+          const createdOrder = await createPurchaseOrder({
             supplier_id: createdBook.supplierId || supplierId,
             book_id: createdBook.id,
             book_name: createdBook.name,
@@ -164,11 +126,7 @@ export function OrdersPage({
             unit_price: initialUnitPrice,
             quantity: initialOrderQuantity,
           });
-          if (createdOrder) {
-            setOrders((prev) => [mapPurchaseOrderApiToOrder(createdOrder), ...prev]);
-          } else {
-            reloadOrders();
-          }
+          setOrders((prev) => [mapPurchaseOrderApiToOrder(createdOrder), ...prev]);
         } catch (error) {
           setOrderError(error instanceof Error ? `Buch angelegt, Erstbestellung fehlgeschlagen: ${error.message}` : "Buch angelegt, Erstbestellung fehlgeschlagen.");
         }
@@ -219,7 +177,7 @@ export function OrdersPage({
         return;
       }
 
-      const createdOrder = await createPurchaseOrderWithFallback({
+      const createdOrder = await createPurchaseOrder({
         supplier_id: selectedSupplier.id,
         book_id: selectedBook.id,
         book_name: selectedBook.name,
@@ -227,12 +185,7 @@ export function OrdersPage({
         unit_price: unitPrice,
         quantity: Math.round(quantity),
       });
-
-      if (createdOrder) {
-        setOrders((prev) => [mapPurchaseOrderApiToOrder(createdOrder), ...prev]);
-      } else {
-        reloadOrders();
-      }
+      setOrders((prev) => [mapPurchaseOrderApiToOrder(createdOrder), ...prev]);
       setDraft({
         bookId: "",
         supplierId: "",

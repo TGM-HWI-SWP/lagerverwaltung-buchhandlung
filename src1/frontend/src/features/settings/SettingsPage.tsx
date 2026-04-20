@@ -28,7 +28,6 @@ export function SettingsPage({
     confirmDelete: true,
     autoRefresh: false,
     autoRefreshSeconds: 30,
-    loadDemoData: true,
   };
 
   return (
@@ -117,28 +116,6 @@ export function SettingsPage({
                   />
                 )}
               </div>
-            </div>
-
-            <div className="flex items-center justify-between rounded-xl border p-4">
-              <div>
-                <h3 className="font-medium">Demo-Daten laden</h3>
-                <p className={`text-sm ${dark ? "text-gray-400" : "text-gray-600"}`}>
-                  Bei leerer Datenbank automatisch Demo-Daten laden (Bücher, Verkäufe, Mitarbeiter).
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSettings((prev) => ({ ...prev, loadDemoData: !prev.loadDemoData }))}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  settings.loadDemoData ? "bg-green-600" : "bg-gray-300"
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    settings.loadDemoData ? "translate-x-6" : "translate-x-1"
-                  }`}
-                />
-              </button>
             </div>
 
             <div className="rounded-xl border p-4">
