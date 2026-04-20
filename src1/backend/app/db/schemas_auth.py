@@ -3,11 +3,6 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class LoginRequest(BaseModel):
-    username: str
-    pin: str = Field(min_length=4, max_length=16)
-
-
 class AdminLoginRequest(BaseModel):
     user_id: str
     password: str = Field(min_length=12, max_length=128)

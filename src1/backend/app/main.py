@@ -1,12 +1,10 @@
-from pathlib import Path
 from uuid import uuid4
 
 from fastapi import FastAPI, Depends, HTTPException                             # FastAPI-Framework
 from fastapi.middleware.cors import CORSMiddleware                              # CORS-Middleware
-from fastapi.responses import StreamingResponse                                 # Streaming für PDF
+from fastapi.responses import JSONResponse, StreamingResponse                   # Streaming für PDF
 from sqlalchemy.orm import Session                                              # DB-Session
 from sqlalchemy import func
-from sqlalchemy import inspect, text
 
 import io                                                                       # PDF-Buffer
 from datetime import datetime                                                   # Zeitstempel im PDF
@@ -16,15 +14,11 @@ import matplotlib.pyplot as plt                                                 
 from matplotlib.backends.backend_pdf import PdfPages                            # PDF-Export
 
 from app.core.config import settings                                            # App-Konfiguration
-# API-key auth was replaced by staff login tokens.
-# ConflictError is handled by a global exception handler
+from app.core.bootstrap import get_database_health, initialize_application
 from app.core.errors import install_error_handlers
-from app.core.migrations import ensure_schema
-from app.db.models import Base                                                  # DB-Modelle
-from app.db import models_commerce  # noqa: F401  # Registriert Commerce-Tabellen im Metadata-Objekt.
-from app.db.models import Book, Supplier
+from app.db.models import Book
 from app.db.models_auth import StaffUser
-from app.db.session import SessionLocal, engine, get_db                         # DB-Verbindung
+from app.db.session import get_db                                               # DB-Verbindung
 from app.db.schemas import (                                                    # Pydantic-Schemas
     BookSchema,
     MovementSchema,
@@ -36,37 +30,37 @@ from app.db.schemas import (                                                    
     IncomingDeliverySchema,
     BookIncomingDeliveryRequest,
 )
-from app.api import books, inventory, suppliers, activity, auth as auth_api, commerce
+from app.api import books, inventory, suppliers, activity, auth as auth_api
 from app.core.auth_staff import hash_password, hash_pin, require_admin, require_user
-from app.core.time import utc_now_iso
 from app.db.schemas_auth import (
     AdminLoginRequest,
     BootstrapAdminRequest,
     BootstrapStatusResponse,
     CashierPinLoginRequest,
-    LoginRequest,
     LoginResponse,
     StaffUserCreateRequest,
     StaffUserSummary,
     StaffUserUpdateRequest,
     WhoAmIResponse,
 )
-from app.db.schemas_commerce import (
-    CatalogProductCreateRequest,
-    CatalogProductSchema,
-    CatalogProductUpdateRequest,
-    DiscountRuleCreateRequest,
-    DiscountRuleSchema,
-    PurchaseOrderCreateRequest,
-    PurchaseOrderReceiveRequest,
-    PurchaseOrderResponse,
-    ReturnCreateRequest,
-    ReturnOrderResponse,
-    SaleCreateRequest,
-    SaleOrderResponse,
-    StockAdjustmentRequest,
-    StockEntrySchema,
-)
+
+
+def _staff_summary(row: StaffUser) -> StaffUserSummary:
+    return StaffUserSummary(
+        id=row.id,
+        username=row.username,
+        display_name=row.display_name,
+        role=row.role,
+        avatar_image=row.avatar_image or "",
+    )
+
+
+def _list_staff_users(db: Session, *, role: str | None = None) -> list[StaffUserSummary]:
+    query = db.query(StaffUser).filter(StaffUser.is_active == True)  # noqa: E712
+    if role is not None:
+        query = query.filter(StaffUser.role == role)
+    rows = query.order_by(StaffUser.role.desc(), StaffUser.display_name.asc()).all()
+    return [_staff_summary(row) for row in rows]
 
 
 def _clamp_pagination(offset: int, limit: int, *, max_limit: int = 100) -> tuple[int, int]:
@@ -74,234 +68,6 @@ def _clamp_pagination(offset: int, limit: int, *, max_limit: int = 100) -> tuple
     limit = max(1, int(limit))
     limit = min(limit, max_limit)
     return offset, limit
-
-
-Base.metadata.create_all(bind=engine)                                           # Tabellen erstellen
-
-
-def _ensure_sqlite_schema():
-    if not str(engine.url).startswith("sqlite"):
-        return
-
-    with engine.begin() as conn:
-        inspector = inspect(conn)
-        if "books" not in inspector.get_table_names():
-            return
-
-        book_columns = {col["name"] for col in inspector.get_columns("books")}
-        if "author" not in book_columns:
-            conn.execute(text("ALTER TABLE books ADD COLUMN author VARCHAR DEFAULT '' NOT NULL"))
-
-        table_names = set(inspector.get_table_names())
-
-        if "staff_users" not in table_names:
-            conn.execute(
-                text(
-                    """
-                    CREATE TABLE staff_users (
-                        id VARCHAR PRIMARY KEY,
-                        username VARCHAR NOT NULL UNIQUE,
-                        display_name VARCHAR NOT NULL,
-                        role VARCHAR NOT NULL DEFAULT 'cashier',
-                        pin_hash VARCHAR NOT NULL,
-                        password_hash VARCHAR NOT NULL DEFAULT '',
-                        is_active BOOLEAN NOT NULL DEFAULT 1,
-                        CONSTRAINT ck_staff_users_pin_hash_non_empty CHECK (pin_hash <> '')
-                    )
-                    """
-                )
-            )
-
-        staff_columns = {col["name"] for col in inspector.get_columns("staff_users")}
-        if "avatar_image" not in staff_columns:
-            conn.execute(text("ALTER TABLE staff_users ADD COLUMN avatar_image VARCHAR NOT NULL DEFAULT ''"))
-        if "password_hash" not in staff_columns:
-            conn.execute(text("ALTER TABLE staff_users ADD COLUMN password_hash VARCHAR NOT NULL DEFAULT ''"))
-        if "book_suppliers" not in table_names:
-            conn.execute(
-                text(
-                     """
-                     CREATE TABLE book_suppliers (
-                         id VARCHAR PRIMARY KEY,
-                         book_id VARCHAR NOT NULL,
-                         supplier_id VARCHAR NOT NULL,
-                         supplier_sku VARCHAR NOT NULL DEFAULT '',
-                         is_primary BOOLEAN NOT NULL DEFAULT 0,
-                         last_purchase_price NUMERIC(10, 2) NOT NULL DEFAULT 0,
-                         created_at VARCHAR NOT NULL,
-                         updated_at VARCHAR NOT NULL,
-                         CONSTRAINT uq_book_suppliers_book_supplier UNIQUE (book_id, supplier_id),
-                         FOREIGN KEY(book_id) REFERENCES books (id),
-                         FOREIGN KEY(supplier_id) REFERENCES suppliers (id),
-                         CONSTRAINT ck_book_suppliers_last_price_non_negative CHECK (last_purchase_price >= 0)
-                     )
-                     """
-                )
-            )
-
-        if "activity_logs" not in table_names:
-            conn.execute(
-                text(
-                     """
-                     CREATE TABLE activity_logs (
-                         id VARCHAR PRIMARY KEY,
-                         timestamp VARCHAR NOT NULL DEFAULT (datetime('now', 'localtime')),
-                         performed_by VARCHAR NOT NULL DEFAULT 'system',
-                         action VARCHAR NOT NULL,
-                         entity_type VARCHAR NOT NULL,
-                         entity_id VARCHAR NOT NULL,
-                         changes TEXT,
-                         reason VARCHAR
-                     )
-                     """
-                )
-            )
-
-        # ---- DateTime migration (SQLite-safe)
-        # SQLite can't ALTER COLUMN reliably. We add *_dt columns and backfill from existing
-        # ISO timestamps stored as TEXT.
-        def _add_dt_column(table: str, old_col: str, new_col: str) -> None:
-            cols = {c["name"] for c in inspector.get_columns(table)}
-            if new_col in cols:
-                return
-            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {new_col} DATETIME"))
-            conn.execute(
-                text(
-                    f"UPDATE {table} SET {new_col} = {old_col} "
-                    f"WHERE {new_col} IS NULL AND {old_col} IS NOT NULL"
-                )
-            )
-
-        if "books" in table_names:
-            _add_dt_column("books", "created_at", "created_at_dt")
-            _add_dt_column("books", "updated_at", "updated_at_dt")
-        if "movements" in table_names:
-            _add_dt_column("movements", "timestamp", "timestamp_dt")
-        if "suppliers" in table_names:
-            _add_dt_column("suppliers", "created_at", "created_at_dt")
-        if "purchase_orders" in table_names:
-            _add_dt_column("purchase_orders", "created_at", "created_at_dt")
-            _add_dt_column("purchase_orders", "delivered_at", "delivered_at_dt")
-        if "incoming_deliveries" in table_names:
-            _add_dt_column("incoming_deliveries", "received_at", "received_at_dt")
-        if "book_suppliers" in table_names:
-            _add_dt_column("book_suppliers", "created_at", "created_at_dt")
-            _add_dt_column("book_suppliers", "updated_at", "updated_at_dt")
-        if "activity_logs" in table_names:
-            _add_dt_column("activity_logs", "timestamp", "timestamp_dt")
-
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_books_supplier_id ON books (supplier_id)"))
-        conn.execute(
-            text("CREATE UNIQUE INDEX IF NOT EXISTS ix_books_sku_non_empty ON books (sku) WHERE sku <> ''")
-        )
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_movements_book_id ON movements (book_id)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_purchase_orders_supplier_id ON purchase_orders (supplier_id)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_purchase_orders_book_id ON purchase_orders (book_id)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_incoming_deliveries_order_id ON incoming_deliveries (order_id)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_incoming_deliveries_book_id ON incoming_deliveries (book_id)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_book_suppliers_supplier_id ON book_suppliers (supplier_id)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_book_suppliers_book_id ON book_suppliers (book_id)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_activity_logs_timestamp ON activity_logs (timestamp DESC)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_activity_logs_entity ON activity_logs (entity_type, entity_id)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_activity_logs_performed_by ON activity_logs (performed_by)"))
-
-        rows = conn.execute(
-            text(
-                """
-                SELECT id, supplier_id, sku, purchase_price, created_at, updated_at
-                FROM books
-                WHERE supplier_id IS NOT NULL AND supplier_id <> ''
-                """
-            )
-        ).fetchall()
-        for row in rows:
-            existing = conn.execute(
-                text(
-                    """
-                    SELECT 1
-                    FROM book_suppliers
-                    WHERE book_id = :book_id AND supplier_id = :supplier_id
-                    """
-                ),
-                {"book_id": row.id, "supplier_id": row.supplier_id},
-            ).fetchone()
-            if existing:
-                continue
-            conn.execute(
-                text(
-                    """
-                    INSERT INTO book_suppliers (
-                        id, book_id, supplier_id, supplier_sku, is_primary,
-                        last_purchase_price, created_at, updated_at
-                    )
-                    VALUES (
-                        :id, :book_id, :supplier_id, :supplier_sku, 1,
-                        :last_purchase_price, :created_at, :updated_at
-                    )
-                    """
-                ),
-                {
-                    "id": str(uuid4()),
-                    "book_id": row.id,
-                    "supplier_id": row.supplier_id,
-                    "supplier_sku": row.sku or "",
-                    "last_purchase_price": row.purchase_price,
-                    "created_at": row.created_at,
-                    "updated_at": row.updated_at,
-                },
-            )
-
-
-def _ensure_default_supplier_data():
-    """Stellt sicher, dass ein Standard-Lieferant existiert."""
-    supplier_id = "S001"
-    supplier_name = "Buchgroßhandel Wien GmbH"
-    supplier_contact = "kontakt@bgh-wien.at"
-    supplier_address = "Mariahilfer Straße 100, 1060 Wien"
-    supplier_notes = "Hauptlieferant für alle Bücher"
-
-    db = SessionLocal()
-    try:
-        exists = db.query(Supplier).filter(Supplier.id == supplier_id).first()
-        if exists:
-            return
-        supplier = SupplierSchema(
-            id=supplier_id,
-            name=supplier_name,
-            contact=supplier_contact,
-            address=supplier_address,
-            notes=supplier_notes,
-            created_at=utc_now_iso(),
-        )
-        suppliers.create_supplier(db, supplier)
-    finally:
-        db.close()
-
-def _seed_database():
-    """Fügt Testdaten ein, wenn die Datenbank leer ist."""
-    if not str(engine.url).startswith("sqlite"):
-        return
-    sql_file = Path(__file__).parent / "db" / "buchhandlung.sql"
-    if not sql_file.exists():
-        return
-    with engine.connect() as conn:
-        book_count = conn.execute(text("SELECT COUNT(*) FROM books")).scalar()
-        if book_count and book_count > 0:
-            return
-        sql = sql_file.read_text(encoding="utf-8")
-        for statement in sql.split(";"):
-            stmt = statement.strip()
-            if stmt:
-                conn.execute(text(stmt))
-        conn.commit()
-
-
-_ensure_sqlite_schema()
-_seed_database()
-_ensure_default_supplier_data()
-
-# Explicit migration hook (currently no-op; keeps a clean seam for future extraction)
-ensure_schema()
 
 app = FastAPI(title=settings.app_name)                                          # App-Instanz
 
@@ -321,6 +87,11 @@ app.add_middleware(
 )
 
 
+@app.on_event("startup")
+def startup() -> None:
+    initialize_application()
+
+
 @app.get("/")
 def root():
     return {
@@ -332,12 +103,15 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "app": settings.app_name}
-
-
-@app.post("/auth/login", response_model=LoginResponse)
-def auth_login(payload: LoginRequest, db: Session = Depends(get_db)):
-    return auth_api.login(db, payload)
+    database = get_database_health()
+    payload = {
+        "status": "ok" if database["ok"] else "degraded",
+        "app": settings.app_name,
+        "database": database,
+    }
+    if database["ok"]:
+        return payload
+    return JSONResponse(status_code=503, content=payload)
 
 
 @app.post("/auth/admin-login", response_model=LoginResponse)
@@ -399,62 +173,17 @@ def read_staff_users(
     db: Session = Depends(get_db),
     user=Depends(require_admin),
 ):
-    rows = (
-        db.query(StaffUser)
-        .filter(StaffUser.is_active == True)  # noqa: E712
-        .order_by(StaffUser.role.desc(), StaffUser.display_name.asc())
-        .all()
-    )
-    return [
-        StaffUserSummary(
-            id=row.id,
-            username=row.username,
-            display_name=row.display_name,
-            role=row.role,
-            avatar_image=row.avatar_image or "",
-        )
-        for row in rows
-    ]
+    return _list_staff_users(db)
 
 
 @app.get("/staff-users/cashier-list", response_model=list[StaffUserSummary])
 def read_cashier_list(db: Session = Depends(get_db)):
-    rows = (
-        db.query(StaffUser)
-        .filter(StaffUser.is_active == True)  # noqa: E712
-        .order_by(StaffUser.display_name.asc())
-        .all()
-    )
-    return [
-        StaffUserSummary(
-            id=row.id,
-            username=row.username,
-            display_name=row.display_name,
-            role=row.role,
-            avatar_image=row.avatar_image or "",
-        )
-        for row in rows
-    ]
+    return _list_staff_users(db)
 
 
 @app.get("/staff-users/admin-list", response_model=list[StaffUserSummary])
 def read_admin_list(db: Session = Depends(get_db)):
-    rows = (
-        db.query(StaffUser)
-        .filter(StaffUser.is_active == True, StaffUser.role == "admin")  # noqa: E712
-        .order_by(StaffUser.display_name.asc())
-        .all()
-    )
-    return [
-        StaffUserSummary(
-            id=row.id,
-            username=row.username,
-            display_name=row.display_name,
-            role=row.role,
-            avatar_image=row.avatar_image or "",
-        )
-        for row in rows
-    ]
+    return _list_staff_users(db, role="admin")
 
 
 @app.post("/staff-users", response_model=StaffUserSummary, status_code=201)
@@ -542,13 +271,7 @@ def update_staff_user(
     db.commit()
     db.refresh(staff_user)
     
-    return StaffUserSummary(
-        id=staff_user.id,
-        username=staff_user.username,
-        display_name=staff_user.display_name,
-        role=staff_user.role,
-        avatar_image=staff_user.avatar_image or "",
-    )
+    return _staff_summary(staff_user)
 
 
 @app.delete("/staff-users/{user_id}")
@@ -733,144 +456,6 @@ def inventory_summary(db: Session = Depends(get_db)):
         "total_units": int(total_units),
         "low_stock_books": [BookSchema.model_validate(book).model_dump() for book in low_stock],
     }
-
-
-# ── Commerce v2 (Katalog, Bestand, Verkauf, Retouren) ─────────────
-
-
-@app.get("/catalog/products", response_model=list[CatalogProductSchema])
-def read_catalog_products(
-    include_inactive: bool = False,
-    db: Session = Depends(get_db),
-    user=Depends(require_user),
-):
-    return commerce.list_catalog_products(db, include_inactive)
-
-
-@app.post("/catalog/products", response_model=CatalogProductSchema, status_code=201)
-def create_catalog_product(
-    payload: CatalogProductCreateRequest,
-    db: Session = Depends(get_db),
-    user=Depends(require_admin),
-):
-    try:
-        return commerce.create_catalog_product(db, payload)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.put("/catalog/products/{product_id}", response_model=CatalogProductSchema)
-def update_catalog_product(
-    product_id: str,
-    payload: CatalogProductUpdateRequest,
-    db: Session = Depends(get_db),
-    user=Depends(require_admin),
-):
-    try:
-        return commerce.update_catalog_product(db, product_id, payload)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.get("/inventory/stock", response_model=list[StockEntrySchema])
-def read_stock_entries(
-    include_zero: bool = False,
-    warehouse_code: str | None = None,
-    db: Session = Depends(get_db),
-    user=Depends(require_user),
-):
-    return commerce.list_stock(db, include_zero=include_zero, warehouse_code=warehouse_code)
-
-
-@app.post("/inventory/stock-adjustments", response_model=StockEntrySchema)
-def create_stock_adjustment(
-    payload: StockAdjustmentRequest,
-    db: Session = Depends(get_db),
-    user=Depends(require_admin),
-):
-    try:
-        return commerce.adjust_stock(db, payload, performed_by=user.username)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.get("/discount-rules", response_model=list[DiscountRuleSchema])
-def read_discount_rules(
-    only_active: bool = True,
-    db: Session = Depends(get_db),
-    user=Depends(require_user),
-):
-    return commerce.list_discount_rules(db, only_active=only_active)
-
-
-@app.post("/discount-rules", response_model=DiscountRuleSchema, status_code=201)
-def create_discount_rule(
-    payload: DiscountRuleCreateRequest,
-    db: Session = Depends(get_db),
-    user=Depends(require_admin),
-):
-    try:
-        return commerce.create_discount_rule(db, payload)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/sales/orders", response_model=SaleOrderResponse, status_code=201)
-def create_sales_order(
-    payload: SaleCreateRequest,
-    db: Session = Depends(get_db),
-    user=Depends(require_user),
-):
-    try:
-        return commerce.create_sale(db, payload, cashier_user_id=user.user_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/sales/orders/{sales_order_id}/returns", response_model=ReturnOrderResponse, status_code=201)
-def create_sales_return(
-    sales_order_id: str,
-    payload: ReturnCreateRequest,
-    db: Session = Depends(get_db),
-    user=Depends(require_user),
-):
-    try:
-        return commerce.create_return(db, sales_order_id, payload, processed_by_user_id=user.user_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/purchase-orders-v2", response_model=PurchaseOrderResponse, status_code=201)
-def create_purchase_order_v2(
-    payload: PurchaseOrderCreateRequest,
-    db: Session = Depends(get_db),
-    user=Depends(require_admin),
-):
-    try:
-        return commerce.create_purchase_order(db, payload, user_id=user.user_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.get("/purchase-orders-v2", response_model=list[PurchaseOrderResponse])
-def read_purchase_orders_v2(
-    db: Session = Depends(get_db),
-    user=Depends(require_user),
-):
-    return commerce.list_purchase_orders(db)
-
-
-@app.post("/purchase-orders-v2/{order_id}/receive", response_model=PurchaseOrderResponse)
-def receive_purchase_order_v2(
-    order_id: str,
-    payload: PurchaseOrderReceiveRequest,
-    db: Session = Depends(get_db),
-    user=Depends(require_admin),
-):
-    try:
-        return commerce.receive_purchase_order(db, order_id, payload, user_id=user.user_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 # ── Reports ────────────────────────────────────────────

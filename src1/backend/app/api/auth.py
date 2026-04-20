@@ -7,7 +7,7 @@ from app.core.auth_staff import AuthUser, hash_password, hash_pin, require_user,
 from app.core.auth_tokens import sign_token
 from app.core.config import settings
 from app.db.models_auth import StaffUser
-from app.db.schemas_auth import AdminLoginRequest, CashierPinLoginRequest, LoginRequest, LoginResponse, WhoAmIResponse
+from app.db.schemas_auth import AdminLoginRequest, CashierPinLoginRequest, LoginResponse, WhoAmIResponse
 
 
 def _to_login_response(user: StaffUser) -> LoginResponse:
@@ -19,21 +19,6 @@ def _to_login_response(user: StaffUser) -> LoginResponse:
         display_name=user.display_name,
         role=user.role,
     )
-
-
-def login(db: Session, req: LoginRequest) -> LoginResponse:
-    user = (
-        db.query(StaffUser)
-        .filter(StaffUser.username == req.username.strip(), StaffUser.is_active == True)  # noqa: E712
-        .first()
-    )
-    if not user or not verify_pin(req.pin, user.pin_hash):
-        # Deliberately generic
-        from fastapi import HTTPException, status
-
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Login fehlgeschlagen")
-
-    return _to_login_response(user)
 
 
 def admin_login(db: Session, req: AdminLoginRequest) -> LoginResponse:

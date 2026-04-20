@@ -11,6 +11,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U buchhandlung -d buchhandlung"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   backend:
     build:
@@ -24,9 +29,11 @@ services:
     environment:
       PYTHONPATH: /app
       DATABASE_URL: postgresql+psycopg://buchhandlung:buchhandlung@postgres:5432/buchhandlung
+      AUTH_SECRET: dev-secret-change-me
     depends_on:
-      - postgres
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      postgres:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     ports:
       - "8000:8000"
 
@@ -42,6 +49,8 @@ services:
       - /app/node_modules
     depends_on:
       - backend
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000
     command: npm run dev -- --host 0.0.0.0 --port 5173
     ports:
       - "5173:5173"
