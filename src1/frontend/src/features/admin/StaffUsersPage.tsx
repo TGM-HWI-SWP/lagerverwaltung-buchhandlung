@@ -4,6 +4,7 @@ import { UserPlus, Edit, Trash2, UserCheck, UserX } from "lucide-react";
 import { apiPost, apiPut, apiDelete } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { createAvatarDataUrl } from "@/lib/avatarImage";
 import type { StaffUserSummary } from "@/types";
 
 type EditModalState = {
@@ -55,12 +56,10 @@ export function StaffUsersPage({ card, dark, users, reloadUsers }: Props) {
 
   const onAvatarUpload = (file: File | null) => {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const value = typeof reader.result === "string" ? reader.result : "";
-      setAvatarImage(value);
-    };
-    reader.readAsDataURL(file);
+    setError(null);
+    createAvatarDataUrl(file)
+      .then((dataUrl) => setAvatarImage(dataUrl))
+      .catch((err) => setError(err instanceof Error ? err.message : "Bild konnte nicht verarbeitet werden."));
   };
 
   const addUser = async () => {
@@ -342,12 +341,10 @@ export function StaffUsersPage({ card, dark, users, reloadUsers }: Props) {
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      const value = typeof reader.result === "string" ? reader.result : "";
-                      setEditModal({...editModal, avatarImage: value});
-                    };
-                    reader.readAsDataURL(file);
+                    setError(null);
+                    createAvatarDataUrl(file)
+                      .then((dataUrl) => setEditModal({ ...editModal, avatarImage: dataUrl }))
+                      .catch((err) => setError(err instanceof Error ? err.message : "Bild konnte nicht verarbeitet werden."));
                   }}
                 />
                 {editModal.avatarImage && (

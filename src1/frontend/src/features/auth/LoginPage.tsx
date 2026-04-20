@@ -4,6 +4,7 @@ import { ChevronLeft, Moon, ShieldCheck, Smartphone, Sun } from "lucide-react";
 import { apiGet, apiPost, setAuthToken } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { createAvatarDataUrl } from "@/lib/avatarImage";
 import type { StaffUserSummary } from "@/types";
 
 type LoginResponse = {
@@ -149,9 +150,10 @@ export function LoginPage({
 
   const onSetupImage = (file: File | null) => {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setSetupAvatar(typeof reader.result === "string" ? reader.result : "");
-    reader.readAsDataURL(file);
+    setError(null);
+    createAvatarDataUrl(file)
+      .then((dataUrl) => setSetupAvatar(dataUrl))
+      .catch((err) => setError(err instanceof Error ? err.message : "Bild konnte nicht verarbeitet werden."));
   };
 
   return (
@@ -173,6 +175,7 @@ export function LoginPage({
                 <input className={inputClass} inputMode="numeric" maxLength={4} placeholder="PIN (4-stellig)" value={setupPin} onChange={(e) => setSetupPin(e.target.value.replace(/[^0-9]/g, ""))} />
                 <input className={inputClass} type="password" placeholder="Admin-Passwort (mind. 12 Zeichen)" value={setupPassword} onChange={(e) => setSetupPassword(e.target.value)} />
                 <input className={inputClass} type="file" accept="image/*" onChange={(e) => onSetupImage(e.target.files?.[0] ?? null)} />
+                {setupAvatar ? <img src={setupAvatar} alt="Avatar Vorschau" className="h-20 w-20 rounded-full object-cover" /> : null}
                 <Button className="h-12" disabled={loading || setupPassword.length < 12 || setupPin.length !== 4} onClick={submitSetup}>
                   {loading ? "Speichern..." : "Ersten Admin anlegen"}
                 </Button>
