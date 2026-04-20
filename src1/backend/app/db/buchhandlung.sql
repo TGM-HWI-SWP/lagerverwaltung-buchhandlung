@@ -3,6 +3,17 @@ CREATE TABLE IF NOT EXISTS suppliers (
     name TEXT NOT NULL,
     contact TEXT NOT NULL DEFAULT '',
     address TEXT NOT NULL DEFAULT '',
+    location_display_name TEXT NOT NULL DEFAULT '',
+    location_street TEXT NOT NULL DEFAULT '',
+    location_house_number TEXT NOT NULL DEFAULT '',
+    location_postcode TEXT NOT NULL DEFAULT '',
+    location_city TEXT NOT NULL DEFAULT '',
+    location_state TEXT NOT NULL DEFAULT '',
+    location_country TEXT NOT NULL DEFAULT '',
+    location_lat TEXT NOT NULL DEFAULT '',
+    location_lon TEXT NOT NULL DEFAULT '',
+    location_source TEXT NOT NULL DEFAULT 'manual',
+    location_source_id TEXT NOT NULL DEFAULT '',
     notes TEXT,
     created_at TEXT NOT NULL
 );
@@ -60,6 +71,17 @@ CREATE TABLE IF NOT EXISTS warehouses (
     id TEXT PRIMARY KEY,
     code TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
+    location_display_name TEXT NOT NULL DEFAULT '',
+    location_street TEXT NOT NULL DEFAULT '',
+    location_house_number TEXT NOT NULL DEFAULT '',
+    location_postcode TEXT NOT NULL DEFAULT '',
+    location_city TEXT NOT NULL DEFAULT '',
+    location_state TEXT NOT NULL DEFAULT '',
+    location_country TEXT NOT NULL DEFAULT '',
+    location_lat TEXT NOT NULL DEFAULT '',
+    location_lon TEXT NOT NULL DEFAULT '',
+    location_source TEXT NOT NULL DEFAULT 'manual',
+    location_source_id TEXT NOT NULL DEFAULT '',
     is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
     created_at TEXT NOT NULL
 );
@@ -236,15 +258,23 @@ CREATE INDEX IF NOT EXISTS ix_activity_logs_timestamp ON activity_logs (timestam
 CREATE INDEX IF NOT EXISTS ix_activity_logs_entity ON activity_logs (entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS ix_audit_events_created_at ON audit_events (created_at DESC);
 
-INSERT INTO suppliers (id, name, contact, address, notes, created_at) VALUES
-('S001', 'Buchgroßhandel Wien GmbH', 'kontakt@bgh-wien.at', 'Mariahilfer Straße 100, 1060 Wien', 'Hauptlieferant für den Kernkatalog', '2026-04-20T08:00:00+00:00'),
-('S002', 'Thalia Partnervertrieb', 'partner@thalia.at', 'Mariahilfer Straße 30, 1060 Wien', 'Alternativer Lieferant für Bestseller', '2026-04-20T08:00:00+00:00'),
-('S003', 'Campus Fachbuch Versand', 'info@campus-fachbuch.at', 'Favoritenstraße 12, 1040 Wien', 'Fach- und IT-Bücher', '2026-04-20T08:00:00+00:00');
+INSERT INTO suppliers (
+    id, name, contact, address, location_display_name, location_street, location_house_number,
+    location_postcode, location_city, location_state, location_country, location_lat, location_lon,
+    location_source, location_source_id, notes, created_at
+) VALUES
+('S001', 'Buchgroßhandel Wien GmbH', 'kontakt@bgh-wien.at', 'Mariahilfer Straße 100, 1060 Wien, Österreich', 'Mariahilfer Straße 100, Wien', 'Mariahilfer Straße', '100', '1060', 'Wien', 'Wien', 'Österreich', '48.196151', '16.339681', 'manual', 'seed-supplier-001', 'Hauptlieferant für den Kernkatalog', '2026-04-20T08:00:00+00:00'),
+('S002', 'Thalia Partnervertrieb', 'partner@thalia.at', 'Mariahilfer Straße 30, 1060 Wien, Österreich', 'Mariahilfer Straße 30, Wien', 'Mariahilfer Straße', '30', '1060', 'Wien', 'Wien', 'Österreich', '48.199062', '16.350156', 'manual', 'seed-supplier-002', 'Alternativer Lieferant für Bestseller', '2026-04-20T08:00:00+00:00'),
+('S003', 'Campus Fachbuch Versand', 'info@campus-fachbuch.at', 'Favoritenstraße 12, 1040 Wien, Österreich', 'Favoritenstraße 12, Wien', 'Favoritenstraße', '12', '1040', 'Wien', 'Wien', 'Österreich', '48.188530', '16.370460', 'manual', 'seed-supplier-003', 'Fach- und IT-Bücher', '2026-04-20T08:00:00+00:00');
 
-INSERT INTO warehouses (id, code, name, is_active, created_at) VALUES
-('WH-STORE', 'STORE', 'Verkaufsfläche', 1, '2026-04-20T08:00:00+00:00'),
-('WH-BACK', 'BACK', 'Lager hinten', 1, '2026-04-20T08:00:00+00:00'),
-('WH-EVENT', 'EVENT', 'Eventlager', 1, '2026-04-20T08:00:00+00:00');
+INSERT INTO warehouses (
+    id, code, name, location_display_name, location_street, location_house_number,
+    location_postcode, location_city, location_state, location_country, location_lat,
+    location_lon, location_source, location_source_id, is_active, created_at
+) VALUES
+('WH-STORE', 'STORE', 'Verkaufsfläche', 'Filiale Mariahilf', 'Mariahilfer Straße', '88a', '1070', 'Wien', 'Wien', 'Österreich', '48.199829', '16.344888', 'manual', 'seed-warehouse-store', 1, '2026-04-20T08:00:00+00:00'),
+('WH-BACK', 'BACK', 'Lager hinten', 'Lager Mariahilf', 'Schottenfeldgasse', '45', '1070', 'Wien', 'Wien', 'Österreich', '48.201727', '16.343040', 'manual', 'seed-warehouse-back', 1, '2026-04-20T08:00:00+00:00'),
+('WH-EVENT', 'EVENT', 'Eventlager', 'Eventlager MuseumsQuartier', 'Museumsplatz', '1', '1070', 'Wien', 'Wien', 'Österreich', '48.203126', '16.359431', 'manual', 'seed-warehouse-event', 1, '2026-04-20T08:00:00+00:00');
 
 INSERT INTO catalog_products (id, sku, title, author, description, category, is_active, created_at, updated_at) VALUES
 ('CP001', 'ISBN-9783608939812', 'Der Herr der Ringe', 'J. R. R. Tolkien', 'Fantasy-Epos in hochwertiger Ausgabe.', 'Fantasy', 1, '2026-04-20T08:00:00+00:00', '2026-04-20T08:00:00+00:00'),

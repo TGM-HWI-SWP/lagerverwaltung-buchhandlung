@@ -7,6 +7,34 @@ from app.db.session import engine
 
 def ensure_schema() -> None:
     with engine.begin() as conn:
+        for statement in [
+            "ALTER TABLE suppliers ADD COLUMN location_display_name TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE suppliers ADD COLUMN location_street TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE suppliers ADD COLUMN location_house_number TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE suppliers ADD COLUMN location_postcode TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE suppliers ADD COLUMN location_city TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE suppliers ADD COLUMN location_state TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE suppliers ADD COLUMN location_country TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE suppliers ADD COLUMN location_lat TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE suppliers ADD COLUMN location_lon TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE suppliers ADD COLUMN location_source TEXT NOT NULL DEFAULT 'manual'",
+            "ALTER TABLE suppliers ADD COLUMN location_source_id TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE warehouses ADD COLUMN location_display_name TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE warehouses ADD COLUMN location_street TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE warehouses ADD COLUMN location_house_number TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE warehouses ADD COLUMN location_postcode TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE warehouses ADD COLUMN location_city TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE warehouses ADD COLUMN location_state TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE warehouses ADD COLUMN location_country TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE warehouses ADD COLUMN location_lat TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE warehouses ADD COLUMN location_lon TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE warehouses ADD COLUMN location_source TEXT NOT NULL DEFAULT 'manual'",
+            "ALTER TABLE warehouses ADD COLUMN location_source_id TEXT NOT NULL DEFAULT ''",
+        ]:
+            try:
+                conn.execute(text(statement))
+            except Exception:
+                pass
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_catalog_products_title ON catalog_products (title)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_product_prices_product_id ON product_prices (product_id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_stock_items_product_id ON stock_items (product_id)"))

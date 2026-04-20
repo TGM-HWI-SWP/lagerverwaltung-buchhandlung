@@ -36,7 +36,35 @@ export type CatalogProductDraft = {
   reorderPoint: string;
 };
 
-export type WarehouseApi = {
+export type LocationFieldsApi = {
+  location_display_name: string;
+  location_street: string;
+  location_house_number: string;
+  location_postcode: string;
+  location_city: string;
+  location_state: string;
+  location_country: string;
+  location_lat: string;
+  location_lon: string;
+  location_source: string;
+  location_source_id: string;
+};
+
+export type LocationFields = {
+  locationDisplayName: string;
+  locationStreet: string;
+  locationHouseNumber: string;
+  locationPostcode: string;
+  locationCity: string;
+  locationState: string;
+  locationCountry: string;
+  locationLat: string;
+  locationLon: string;
+  locationSource: string;
+  locationSourceId: string;
+};
+
+export type WarehouseApi = LocationFieldsApi & {
   id: string;
   code: string;
   name: string;
@@ -44,7 +72,7 @@ export type WarehouseApi = {
   created_at?: string | null;
 };
 
-export type Warehouse = {
+export type Warehouse = LocationFields & {
   id: string;
   code: string;
   name: string;
@@ -55,6 +83,15 @@ export type Warehouse = {
 export type WarehouseDraft = {
   code: string;
   name: string;
+  locationDisplayName: string;
+  locationStreet: string;
+  locationHouseNumber: string;
+  locationPostcode: string;
+  locationCity: string;
+  locationState: string;
+  locationCountry: string;
+  locationLat: string;
+  locationLon: string;
 };
 
 export type StockEntryApi = {
@@ -132,7 +169,7 @@ export type ProductSupplierLinkDraft = {
   lastPurchasePrice: string;
 };
 
-export type Supplier = {
+export type Supplier = LocationFieldsApi & {
   id: string;
   name: string;
   contact: string;
@@ -145,6 +182,15 @@ export type SupplierDraft = {
   name: string;
   contact: string;
   address: string;
+  locationDisplayName: string;
+  locationStreet: string;
+  locationHouseNumber: string;
+  locationPostcode: string;
+  locationCity: string;
+  locationState: string;
+  locationCountry: string;
+  locationLat: string;
+  locationLon: string;
   notes: string;
 };
 

@@ -57,8 +57,37 @@ class WarehouseSchema(BaseModel):
     id: str
     code: str
     name: str
+    location_display_name: str = ""
+    location_street: str = ""
+    location_house_number: str = ""
+    location_postcode: str = ""
+    location_city: str = ""
+    location_state: str = ""
+    location_country: str = ""
+    location_lat: str = ""
+    location_lon: str = ""
+    location_source: str = "manual"
+    location_source_id: str = ""
     is_active: bool = True
     created_at: str | None = None
+
+    @field_validator(
+        "location_display_name",
+        "location_street",
+        "location_house_number",
+        "location_postcode",
+        "location_city",
+        "location_state",
+        "location_country",
+        "location_lat",
+        "location_lon",
+        "location_source",
+        "location_source_id",
+        mode="before",
+    )
+    @classmethod
+    def normalize_location_fields(cls, value: str | None) -> str:
+        return (value or "").strip()
 
     @field_validator("created_at", mode="before")
     @classmethod
@@ -69,6 +98,17 @@ class WarehouseSchema(BaseModel):
 class WarehouseCreateRequest(BaseModel):
     code: str = Field(min_length=1, max_length=32)
     name: str = Field(min_length=1, max_length=120)
+    location_display_name: str = ""
+    location_street: str = ""
+    location_house_number: str = ""
+    location_postcode: str = ""
+    location_city: str = Field(min_length=1, max_length=120)
+    location_state: str = ""
+    location_country: str = Field(min_length=1, max_length=120)
+    location_lat: str = ""
+    location_lon: str = ""
+    location_source: str = "manual"
+    location_source_id: str = ""
 
     @field_validator("code", mode="before")
     @classmethod
@@ -80,10 +120,60 @@ class WarehouseCreateRequest(BaseModel):
     def normalize_name(cls, value: str | None) -> str:
         return (value or "").strip()
 
+    @field_validator(
+        "location_display_name",
+        "location_street",
+        "location_house_number",
+        "location_postcode",
+        "location_city",
+        "location_state",
+        "location_country",
+        "location_lat",
+        "location_lon",
+        "location_source",
+        "location_source_id",
+        mode="before",
+    )
+    @classmethod
+    def normalize_location_strings(cls, value: str | None) -> str:
+        return (value or "").strip()
+
 
 class WarehouseUpdateRequest(BaseModel):
     name: str | None = None
     is_active: bool | None = None
+    location_display_name: str | None = None
+    location_street: str | None = None
+    location_house_number: str | None = None
+    location_postcode: str | None = None
+    location_city: str | None = None
+    location_state: str | None = None
+    location_country: str | None = None
+    location_lat: str | None = None
+    location_lon: str | None = None
+    location_source: str | None = None
+    location_source_id: str | None = None
+
+    @field_validator(
+        "name",
+        "location_display_name",
+        "location_street",
+        "location_house_number",
+        "location_postcode",
+        "location_city",
+        "location_state",
+        "location_country",
+        "location_lat",
+        "location_lon",
+        "location_source",
+        "location_source_id",
+        mode="before",
+    )
+    @classmethod
+    def normalize_optional_strings(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip()
 
 
 class StockEntrySchema(BaseModel):

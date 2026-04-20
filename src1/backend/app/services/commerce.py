@@ -27,7 +27,7 @@ from app.db.models_commerce import (
     StockLedgerEntry,
     Warehouse,
 )
-from app.db.schemas import SupplierSchema
+from app.db.schemas import SupplierCreateRequest, SupplierSchema
 from app.db.schemas_commerce import (
     AppliedDiscountResponse,
     CatalogProductCreateRequest,
@@ -74,6 +74,43 @@ class CommerceService:
             "EVENT": "Eventlager",
         }.get(code, code.title())
 
+    def _compose_address(
+        self,
+        street: str,
+        house_number: str,
+        postcode: str,
+        city: str,
+        state: str,
+        country: str,
+    ) -> str:
+        line_one = " ".join(part for part in [street.strip(), house_number.strip()] if part)
+        line_two = " ".join(part for part in [postcode.strip(), city.strip()] if part)
+        line_three = ", ".join(part for part in [state.strip(), country.strip()] if part)
+        return ", ".join(part for part in [line_one, line_two, line_three] if part)
+
+    def _supplier_schema(self, supplier: Supplier) -> SupplierSchema:
+        return SupplierSchema.model_validate(supplier)
+
+    def _warehouse_schema(self, warehouse: Warehouse) -> WarehouseSchema:
+        return WarehouseSchema(
+            id=warehouse.id,
+            code=warehouse.code,
+            name=warehouse.name,
+            location_display_name=warehouse.location_display_name or "",
+            location_street=warehouse.location_street or "",
+            location_house_number=warehouse.location_house_number or "",
+            location_postcode=warehouse.location_postcode or "",
+            location_city=warehouse.location_city or "",
+            location_state=warehouse.location_state or "",
+            location_country=warehouse.location_country or "",
+            location_lat=warehouse.location_lat or "",
+            location_lon=warehouse.location_lon or "",
+            location_source=warehouse.location_source or "manual",
+            location_source_id=warehouse.location_source_id or "",
+            is_active=bool(warehouse.is_active),
+            created_at=warehouse.created_at.isoformat() if warehouse.created_at else None,
+        )
+
     def _ensure_warehouse(self, code: str = "STORE") -> Warehouse:
         normalized = code.strip().upper()
         warehouse = self._db.query(Warehouse).filter(Warehouse.code == normalized).first()
@@ -84,6 +121,10 @@ class CommerceService:
             id=f"WH-{uuid4().hex[:12].upper()}",
             code=normalized,
             name=self._warehouse_name(normalized),
+            location_display_name=self._warehouse_name(normalized),
+            location_city="Wien",
+            location_country="Österreich",
+            location_source="manual",
             is_active=True,
             created_at=now,
         )
@@ -288,18 +329,37 @@ class CommerceService:
     def list_suppliers(self) -> list[Supplier]:
         return self._db.query(Supplier).order_by(Supplier.name.asc()).all()
 
-    def create_supplier(self, payload: SupplierSchema) -> Supplier:
+    def create_supplier(self, payload: SupplierCreateRequest) -> SupplierSchema:
         ids = self._db.query(Supplier.id).all()
         max_num = 0
         for (supplier_id,) in ids:
             if supplier_id and supplier_id.startswith("S") and supplier_id[1:].isdigit():
                 max_num = max(max_num, int(supplier_id[1:]))
         now = self._now()
+        address = payload.address or self._compose_address(
+            payload.location_street,
+            payload.location_house_number,
+            payload.location_postcode,
+            payload.location_city,
+            payload.location_state,
+            payload.location_country,
+        )
         supplier = Supplier(
             id=payload.id or f"S{max_num + 1:03d}",
             name=payload.name,
             contact=payload.contact,
-            address=payload.address,
+            address=address,
+            location_display_name=payload.location_display_name or address,
+            location_street=payload.location_street,
+            location_house_number=payload.location_house_number,
+            location_postcode=payload.location_postcode,
+            location_city=payload.location_city,
+            location_state=payload.location_state,
+            location_country=payload.location_country,
+            location_lat=payload.location_lat,
+            location_lon=payload.location_lon,
+            location_source=payload.location_source or "manual",
+            location_source_id=payload.location_source_id,
             notes=payload.notes,
             created_at=now,
         )
@@ -307,7 +367,7 @@ class CommerceService:
         self._audit("supplier_created", "supplier", supplier.id, None, {"name": supplier.name})
         self._db.commit()
         self._db.refresh(supplier)
-        return supplier
+        return self._supplier_schema(supplier)
 
     def list_catalog_products(self, include_inactive: bool) -> list[CatalogProductSchema]:
         q = self._db.query(CatalogProduct)
@@ -417,16 +477,7 @@ class CommerceService:
         return {"detail": "Produkt wurde vollständig gelöscht."}
 
     def list_warehouses(self) -> list[WarehouseSchema]:
-        return [
-            WarehouseSchema(
-                id=row.id,
-                code=row.code,
-                name=row.name,
-                is_active=bool(row.is_active),
-                created_at=row.created_at.isoformat() if row.created_at else None,
-            )
-            for row in self._db.query(Warehouse).order_by(Warehouse.code.asc()).all()
-        ]
+        return [self._warehouse_schema(row) for row in self._db.query(Warehouse).order_by(Warehouse.code.asc()).all()]
 
     def create_warehouse(self, payload: WarehouseCreateRequest) -> WarehouseSchema:
         existing = self._db.query(Warehouse).filter(Warehouse.code == payload.code).first()
@@ -437,13 +488,24 @@ class CommerceService:
             id=f"WH-{uuid4().hex[:12].upper()}",
             code=payload.code,
             name=payload.name,
+            location_display_name=payload.location_display_name or payload.name,
+            location_street=payload.location_street,
+            location_house_number=payload.location_house_number,
+            location_postcode=payload.location_postcode,
+            location_city=payload.location_city,
+            location_state=payload.location_state,
+            location_country=payload.location_country,
+            location_lat=payload.location_lat,
+            location_lon=payload.location_lon,
+            location_source=payload.location_source or "manual",
+            location_source_id=payload.location_source_id,
             is_active=True,
             created_at=now,
         )
         self._db.add(warehouse)
         self._audit("warehouse_created", "warehouse", warehouse.id, None, {"code": warehouse.code, "name": warehouse.name})
         self._db.commit()
-        return WarehouseSchema(id=warehouse.id, code=warehouse.code, name=warehouse.name, is_active=True, created_at=warehouse.created_at.isoformat())
+        return self._warehouse_schema(warehouse)
 
     def update_warehouse(self, warehouse_id: str, payload: WarehouseUpdateRequest) -> WarehouseSchema:
         warehouse = self._db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
@@ -451,11 +513,33 @@ class CommerceService:
             raise ValueError("Lagerort nicht gefunden")
         if payload.name is not None:
             warehouse.name = payload.name.strip()
+        if payload.location_display_name is not None:
+            warehouse.location_display_name = payload.location_display_name
+        if payload.location_street is not None:
+            warehouse.location_street = payload.location_street
+        if payload.location_house_number is not None:
+            warehouse.location_house_number = payload.location_house_number
+        if payload.location_postcode is not None:
+            warehouse.location_postcode = payload.location_postcode
+        if payload.location_city is not None:
+            warehouse.location_city = payload.location_city
+        if payload.location_state is not None:
+            warehouse.location_state = payload.location_state
+        if payload.location_country is not None:
+            warehouse.location_country = payload.location_country
+        if payload.location_lat is not None:
+            warehouse.location_lat = payload.location_lat
+        if payload.location_lon is not None:
+            warehouse.location_lon = payload.location_lon
+        if payload.location_source is not None:
+            warehouse.location_source = payload.location_source
+        if payload.location_source_id is not None:
+            warehouse.location_source_id = payload.location_source_id
         if payload.is_active is not None:
             warehouse.is_active = payload.is_active
         self._audit("warehouse_updated", "warehouse", warehouse.id, None, {"code": warehouse.code, "name": warehouse.name})
         self._db.commit()
-        return WarehouseSchema(id=warehouse.id, code=warehouse.code, name=warehouse.name, is_active=bool(warehouse.is_active), created_at=warehouse.created_at.isoformat())
+        return self._warehouse_schema(warehouse)
 
     def list_stock(self, include_zero: bool, warehouse_code: str | None, product_id: str | None = None) -> list[StockEntrySchema]:
         q = (

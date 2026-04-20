@@ -17,7 +17,7 @@ from app.core.errors import install_error_handlers
 from app.db.models import Supplier
 from app.db.models_auth import StaffUser
 from app.db.models_commerce import CatalogProduct, PurchaseOrderV2Line, SalesOrder, StockItem, StockLedgerEntry, Warehouse
-from app.db.schemas import SupplierSchema
+from app.db.schemas import SupplierCreateRequest, SupplierSchema
 from app.db.schemas_auth import (
     AdminLoginRequest,
     BootstrapAdminRequest,
@@ -372,7 +372,7 @@ def read_suppliers(db: Session = Depends(get_db), user=Depends(require_user)):
 
 
 @app.post("/suppliers", response_model=SupplierSchema, status_code=201)
-def create_supplier(payload: SupplierSchema, db: Session = Depends(get_db), user=Depends(require_admin)):
+def create_supplier(payload: SupplierCreateRequest, db: Session = Depends(get_db), user=Depends(require_admin)):
     try:
         return _service(db).create_supplier(payload)
     except ValueError as exc:

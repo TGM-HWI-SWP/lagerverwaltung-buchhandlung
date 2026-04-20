@@ -52,6 +52,14 @@ class SqliteSchemaTest(unittest.TestCase):
             "staff_users": self.conn.execute("SELECT COUNT(*) FROM staff_users").fetchone()[0],
         }
         self.assertEqual(counts, {"catalog_products": 6, "warehouses": 3, "stock_items": 10, "product_suppliers": 7, "staff_users": 0})
+        supplier_columns = {
+            row[1] for row in self.conn.execute("PRAGMA table_info(suppliers)").fetchall()
+        }
+        warehouse_columns = {
+            row[1] for row in self.conn.execute("PRAGMA table_info(warehouses)").fetchall()
+        }
+        self.assertTrue({"location_city", "location_country", "location_lat", "location_lon"}.issubset(supplier_columns))
+        self.assertTrue({"location_city", "location_country", "location_lat", "location_lon"}.issubset(warehouse_columns))
 
     def test_purchase_flow_tables_accept_multi_line_rows(self) -> None:
         execute_sql_file(self.conn)
