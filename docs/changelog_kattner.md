@@ -255,15 +255,46 @@ df33488 Add structured locations to suppliers and warehouses
 
 ---
 
+## [v0.10] - 2026-04-20
+
+### Implementiert
+
+- Backend: `custom_discount_type` (`FIXED` | `PERCENT`) zu `SaleCreateRequest` ergänzt
+- Backend: Prozentualer Rabatt in `CommerceService.create_sale` korrekt berechnet
+- Frontend: neuer `CartLine`-Typ in `types.ts`; `SaleDraft` auf `lines[]` umgestellt
+- Frontend: POS-Topbar verschlankt (nur Titel, Nutzername, Theme-Toggle, Logout), keine Beschreibungszeile mehr
+- Frontend: POS-Shell auf `h-screen overflow-hidden` gesetzt, damit die Arbeitsfläche vollflächig genutzt wird
+- Frontend: `GoodsOutPage` komplett auf echten POS-Modus umgebaut:
+  - linke Kassenleiste (`PosSidebar`): Lagerort-Wahl, scrollbarer `CartLineList` mit +/−/✕ je Position, Rabatt-Block, Gesamtsumme, Checkout-Button sowie Ghost-Buttons für Retoure und Verlauf
+  - rechte Produktfläche (`ProductBoard`): immer sichtbare Suche, antippbare Produktkacheln in responsivem Grid (`sm:2col → lg:3col → 2xl:4col`), kompakter Leer-Zustand
+  - `ReturnDrawer`: Overlay mit Auftrags-/Zeilenwahl, Qty-Keypad und Retourgrund – nur auf Anfrage geöffnet
+  - `SalesHistoryDrawer`: Overlay mit letzten Verkäufen – Klick übergibt Verkaufsauftrag direkt an `ReturnDrawer`
+  - `createSale` nutzt jetzt volle `lines[]`-Payload statt einzelner Zeile
+
+### Tests geschrieben
+
+- Keine neuen Tests (bestehende Backend-Tests bleiben grün, Build-Output bestätigt)
+
+### Commits
+
+```text
+15aa189 backend: add custom_discount_type PERCENT support to sale schema and service
+e0fb422 frontend: add CartLine type and update SaleDraft for multi-line sales
+2639b83 frontend: slim POS topbar and set full-height POS shell in App
+200b435 frontend: rebuild GoodsOutPage as POS workspace with cart drawers and product board
+```
+
+---
+
 ## Zusammenfassung
 
-**Gesamt implementierte Schwerpunkte:** getrenntes Katalog-/Stock-/Ledger-Modell, Multi-Warehouse-Bestand, SQLite/PostgreSQL-Setup, rollenbasierte Authentifizierung, strukturierte Standorte mit OSM-Autocomplete, mehrzeilige Einkaufsbestellungen, Wareneingang je Lagerort, Verkauf und Retouren, Aktivitäts-Log, UI für Katalog, Lager, Einkauf, Wareneingang, Verkauf, Lieferanten und Administration  
-**Gesamt geschriebene Tests:** 2 produktive Python-Testsuiten  
-**Gesamt erfasste Commits in diesem Changelog:** 39  
-**Größte Herausforderung:** Das Datenmodell zwischen Frontend, API und Persistenz konsistent weiterzuentwickeln, ohne den bestehenden `src1`-Flow zu zerbrechen  
+**Gesamt implementierte Schwerpunkte:** getrenntes Katalog-/Stock-/Ledger-Modell, Multi-Warehouse-Bestand, SQLite/PostgreSQL-Setup, rollenbasierte Authentifizierung, strukturierte Standorte mit OSM-Autocomplete, mehrzeilige Einkaufsbestellungen, Wareneingang je Lagerort, Verkauf und Retouren, Aktivitäts-Log, UI für Katalog, Lager, Einkauf, Wareneingang, Verkauf, Lieferanten und Administration, POS-Vollarbeitsfläche mit echtem Warenkorb
+**Gesamt geschriebene Tests:** 2 produktive Python-Testsuiten
+**Gesamt erfasste Commits in diesem Changelog:** 44
+**Größte Herausforderung:** Das Datenmodell zwischen Frontend, API und Persistenz konsistent weiterzuentwickeln, ohne den bestehenden `src1`-Flow zu zerbrechen
 **Schönste Code-Idee:** Die automatische Pflege der Buch-Lieferanten-Zuordnung beim Persistieren statt reiner Einzel-FK-Logik
 
 ---
 
-**Changelog erstellt von:** Kattner  
+**Changelog erstellt von:** Kattner
 **Letzte Aktualisierung:** 2026-04-20
