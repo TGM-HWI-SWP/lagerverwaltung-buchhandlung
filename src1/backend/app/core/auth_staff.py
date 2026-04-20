@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
 
 from fastapi import Depends, Header, HTTPException, status
@@ -18,6 +17,11 @@ except ImportError:
     HAS_BCRYPT = False
 
 
+def _require_bcrypt() -> None:
+    if not HAS_BCRYPT:
+        raise RuntimeError("bcrypt ist erforderlich, um Mitarbeiter-Logins sicher zu verwenden.")
+
+
 @dataclass(frozen=True)
 class AuthUser:
     user_id: str
@@ -27,42 +31,34 @@ class AuthUser:
 
 
 def hash_pin(pin: str) -> str:
-    """Hash a 4-digit PIN using bcrypt (fallback to SHA-256)."""
-    if HAS_BCRYPT:
-        salt = bcrypt.gensalt(rounds=6)
-        return bcrypt.hashpw(pin.encode("utf-8"), salt).decode("utf-8")
-    else:
-        return hashlib.sha256(pin.encode("utf-8")).hexdigest()
+    """Hash a 4-digit PIN using bcrypt."""
+    _require_bcrypt()
+    salt = bcrypt.gensalt(rounds=6)
+    return bcrypt.hashpw(pin.encode("utf-8"), salt).decode("utf-8")
 
 
 def hash_password(password: str) -> str:
-    """Hash a password using bcrypt (fallback to SHA-256)."""
-    if HAS_BCRYPT:
-        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    else:
-        return hashlib.sha256(password.encode("utf-8")).hexdigest()
+    """Hash a password using bcrypt."""
+    _require_bcrypt()
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_pin(pin: str, hashed_pin: str) -> bool:
-    """Verify a PIN against its hash (bcrypt or SHA-256)."""
-    if HAS_BCRYPT:
-        try:
-            return bcrypt.checkpw(pin.encode("utf-8"), hashed_pin.encode("utf-8"))
-        except (ValueError, TypeError):
-            return False
-    else:
-        return hash_pin(pin) == hashed_pin
+    """Verify a PIN against its bcrypt hash."""
+    _require_bcrypt()
+    try:
+        return bcrypt.checkpw(pin.encode("utf-8"), hashed_pin.encode("utf-8"))
+    except (ValueError, TypeError):
+        return False
 
 
 def verify_password(password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash (bcrypt or SHA-256)."""
-    if HAS_BCRYPT:
-        try:
-            return bcrypt.checkpw(password.encode("utf-8"), hashed_password.encode("utf-8"))
-        except (ValueError, TypeError):
-            return False
-    else:
-        return hash_password(password) == hashed_password
+    """Verify a password against its bcrypt hash."""
+    _require_bcrypt()
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), hashed_password.encode("utf-8"))
+    except (ValueError, TypeError):
+        return False
 
 
 def require_user(

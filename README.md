@@ -97,7 +97,7 @@ npm run dev
 
 ## Authentifizierung
 
-- Bootstrap eines ersten Admins über `POST /auth/bootstrap-admin`
+- Bootstrap eines ersten Admins über `POST /auth/bootstrap-admin`; frische Seed-Daten enthalten bewusst keine Demo-Logins
 - Kassierer melden sich per PIN an
 - Admins melden sich per Passwort an
 - Die Kassenliste enthält bewusst nur Benutzer mit Rolle `cashier`

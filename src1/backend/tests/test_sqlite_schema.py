@@ -49,11 +49,20 @@ class SqliteSchemaTest(unittest.TestCase):
             "warehouses": self.conn.execute("SELECT COUNT(*) FROM warehouses").fetchone()[0],
             "stock_items": self.conn.execute("SELECT COUNT(*) FROM stock_items").fetchone()[0],
             "product_suppliers": self.conn.execute("SELECT COUNT(*) FROM product_suppliers").fetchone()[0],
+            "staff_users": self.conn.execute("SELECT COUNT(*) FROM staff_users").fetchone()[0],
         }
-        self.assertEqual(counts, {"catalog_products": 6, "warehouses": 3, "stock_items": 10, "product_suppliers": 7})
+        self.assertEqual(counts, {"catalog_products": 6, "warehouses": 3, "stock_items": 10, "product_suppliers": 7, "staff_users": 0})
 
     def test_purchase_flow_tables_accept_multi_line_rows(self) -> None:
         execute_sql_file(self.conn)
+        self.conn.execute(
+            """
+            INSERT INTO staff_users (
+                id, username, display_name, avatar_image, role, pin_hash, password_hash, is_active
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("U-TEST001", "admin.test", "Admin Test", "", "admin", "bcrypt-test-pin", "bcrypt-test-password", 1),
+        )
 
         self.conn.execute(
             """
@@ -65,7 +74,7 @@ class SqliteSchemaTest(unittest.TestCase):
                 "PO2-EXTRA",
                 "PO2-20260421-EXTRA",
                 "S001",
-                "U-DEMO002",
+                "U-TEST001",
                 "ORDERED",
                 "Testbestellung",
                 "2026-04-21T09:00:00+00:00",

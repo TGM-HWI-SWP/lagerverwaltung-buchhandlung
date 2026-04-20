@@ -241,10 +241,6 @@ INSERT INTO suppliers (id, name, contact, address, notes, created_at) VALUES
 ('S002', 'Thalia Partnervertrieb', 'partner@thalia.at', 'Mariahilfer Straße 30, 1060 Wien', 'Alternativer Lieferant für Bestseller', '2026-04-20T08:00:00+00:00'),
 ('S003', 'Campus Fachbuch Versand', 'info@campus-fachbuch.at', 'Favoritenstraße 12, 1040 Wien', 'Fach- und IT-Bücher', '2026-04-20T08:00:00+00:00');
 
-INSERT INTO staff_users (id, username, display_name, avatar_image, role, pin_hash, password_hash, is_active) VALUES
-('U-DEMO001', 'kasse.demo', 'Demo Kasse', '', 'cashier', 'demo-pin-hash', '', 1),
-('U-DEMO002', 'admin.demo', 'Demo Admin', '', 'admin', 'demo-admin-pin', 'demo-admin-password-hash', 1);
-
 INSERT INTO warehouses (id, code, name, is_active, created_at) VALUES
 ('WH-STORE', 'STORE', 'Verkaufsfläche', 1, '2026-04-20T08:00:00+00:00'),
 ('WH-BACK', 'BACK', 'Lager hinten', 1, '2026-04-20T08:00:00+00:00'),
@@ -302,24 +298,6 @@ INSERT INTO stock_ledger_entries (id, product_id, warehouse_id, quantity_delta, 
 ('LG008', 'CP005', 'WH-BACK', 7, 'INITIAL_LOAD', 'seed', 'seed-008', 'Startbestand', 'system', '2026-04-20T08:00:00+00:00'),
 ('LG009', 'CP006', 'WH-STORE', 9, 'INITIAL_LOAD', 'seed', 'seed-009', 'Startbestand', 'system', '2026-04-20T08:00:00+00:00'),
 ('LG010', 'CP006', 'WH-EVENT', 5, 'INITIAL_LOAD', 'seed', 'seed-010', 'Startbestand', 'system', '2026-04-20T08:00:00+00:00');
-
-INSERT INTO purchase_orders_v2 (id, order_number, supplier_id, created_by_user_id, status, notes, ordered_at, received_at) VALUES
-('PO2001', 'PO2-20260420-001', 'S001', 'U-DEMO002', 'PARTIAL_RECEIVED', 'Nachschub für Fantasy und Klassiker', '2026-04-20T08:30:00+00:00', NULL),
-('PO2002', 'PO2-20260420-002', 'S003', 'U-DEMO002', 'ORDERED', 'Fachbuch-Aktion', '2026-04-20T09:00:00+00:00', NULL);
-
-INSERT INTO purchase_order_v2_lines (id, purchase_order_id, product_id, quantity, received_quantity, unit_cost) VALUES
-('POL2001', 'PO2001', 'CP001', 6, 3, 20.99),
-('POL2002', 'PO2001', 'CP004', 8, 4, 5.95),
-('POL2003', 'PO2002', 'CP005', 10, 0, 24.49);
-
-INSERT INTO sales_orders (id, order_number, cashier_user_id, customer_reference, warehouse_code, is_first_customer, subtotal, discount_total, total, status, created_at) VALUES
-('SO001', 'SO-20260420-001', 'U-DEMO001', '', 'STORE', 0, 29.99, 0, 29.99, 'COMPLETED', '2026-04-20T10:00:00+00:00');
-
-INSERT INTO sales_order_lines (id, sales_order_id, product_id, product_name, quantity, unit_price, line_discount, line_total) VALUES
-('SL001', 'SO001', 'CP001', 'Der Herr der Ringe', 1, 29.99, 0, 29.99);
-
-INSERT INTO stock_ledger_entries (id, product_id, warehouse_id, quantity_delta, movement_type, reference_type, reference_id, reason, performed_by, created_at) VALUES
-('LG011', 'CP001', 'WH-STORE', -1, 'SALE', 'sales_order', 'SO001', 'Verkauf', 'U-DEMO001', '2026-04-20T10:00:00+00:00');
 
 INSERT INTO audit_events (id, event_type, entity_type, entity_id, actor_user_id, payload, created_at) VALUES
 ('AE001', 'seed_loaded', 'system', 'seed-20260420', NULL, '{"seed":"catalog-stock-ledger"}', '2026-04-20T08:00:00+00:00');

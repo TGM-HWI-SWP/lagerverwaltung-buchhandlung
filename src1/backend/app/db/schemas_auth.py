@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class AdminLoginRequest(BaseModel):
-    user_id: str
+    username: str = Field(min_length=3, max_length=64)
     password: str = Field(min_length=12, max_length=128)
 
 

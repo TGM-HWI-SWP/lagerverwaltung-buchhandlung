@@ -31,6 +31,7 @@ export function LoginPage({
   const [cashiers, setCashiers] = useState<StaffUserSummary[]>([]);
   const [admins, setAdmins] = useState<StaffUserSummary[]>([]);
   const [selectedUser, setSelectedUser] = useState<StaffUserSummary | null>(null);
+  const [adminUsername, setAdminUsername] = useState("");
   const [pin, setPin] = useState("");
   const [password, setPassword] = useState("");
   const [setupUsername, setSetupUsername] = useState("admin");
@@ -55,15 +56,8 @@ export function LoginPage({
     : "w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900";
 
   const loadUsers = async () => {
-    const [cashierRows, adminRows] = await Promise.all([
-      apiGet<StaffUserSummary[]>("/staff-users/cashier-list"),
-      apiGet<StaffUserSummary[]>("/staff-users/admin-list"),
-    ]);
-    setCashiers(cashierRows.filter((u: StaffUserSummary) => u.role === "cashier" || u.role === "admin"));
-    setAdmins(adminRows);
-    if (adminRows.length === 0) {
-      setScreen("setup");
-    }
+    const cashierRows = await apiGet<StaffUserSummary[]>("/staff-users/cashier-list");
+    setCashiers(cashierRows.filter((u: StaffUserSummary) => u.role === "cashier"));
   };
 
   useEffect(() => {
@@ -125,12 +119,12 @@ export function LoginPage({
   }
 
   async function submitAdmin() {
-    if (!selectedUser || password.length < 12) return;
+    if (adminUsername.trim().length < 3 || password.length < 12) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await apiPost<LoginResponse, { user_id: string; password: string }>("/auth/admin-login", {
-        user_id: selectedUser.id,
+      const res = await apiPost<LoginResponse, { username: string; password: string }>("/auth/admin-login", {
+        username: adminUsername.trim().toLowerCase(),
         password,
       });
       setAuthToken(res.access_token);
@@ -196,28 +190,27 @@ export function LoginPage({
                 <button className={`${tile()} min-h-40`} onClick={() => setScreen("admin-users")}>
                   <div className="mb-3 inline-flex rounded-xl bg-blue-500/15 p-2"><ShieldCheck /></div>
                   <div className="text-2xl font-semibold">Admin-Login</div>
-                  <p className={dark ? "mt-2 text-slate-300" : "mt-2 text-slate-600"}>Admin wählen und Passwort (mind. 12 Zeichen) eingeben.</p>
+                  <p className={dark ? "mt-2 text-slate-300" : "mt-2 text-slate-600"}>Benutzername und Admin-Passwort (mind. 12 Zeichen) eingeben.</p>
                 </button>
               </div>
             )}
 
-            {(screen === "cashier-users" || screen === "admin-users") && (
+            {screen === "cashier-users" && (
               <div className="mt-6">
                 <button className="mb-4 inline-flex items-center gap-2 text-sm" onClick={() => setScreen("landing")}>
                   <ChevronLeft size={16} /> Zurück
                 </button>
-                <h2 className="mb-4 text-xl font-semibold">{screen === "cashier-users" ? "Mitarbeiter wählen" : "Admin wählen"}</h2>
+                <h2 className="mb-4 text-xl font-semibold">Mitarbeiter wählen</h2>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                  {(screen === "cashier-users" ? cashiers : admins).map((user) => (
+                  {cashiers.map((user) => (
                     <button
                       key={user.id}
                       className={tile(selectedUser?.id === user.id)}
                       onClick={() => {
                         setSelectedUser(user);
                         setPin("");
-                        setPassword("");
                         setError(null);
-                        setScreen(screen === "cashier-users" ? "cashier-pin" : "admin-password");
+                        setScreen("cashier-pin");
                       }}
                     >
                       <div className="mb-3">{avatar(user)}</div>
@@ -225,6 +218,20 @@ export function LoginPage({
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {screen === "admin-users" && (
+              <div className="mt-6 max-w-xl space-y-4">
+                <button className="inline-flex items-center gap-2 text-sm" onClick={() => setScreen("landing")}>
+                  <ChevronLeft size={16} /> Zurück
+                </button>
+                <h2 className="text-xl font-semibold">Admin anmelden</h2>
+                <input className={inputClass} placeholder="Benutzername" value={adminUsername} onChange={(e) => setAdminUsername(e.target.value)} />
+                <input className={inputClass} type="password" placeholder="Passwort" value={password} onChange={(e) => setPassword(e.target.value)} />
+                <Button className="h-12" disabled={loading || adminUsername.trim().length < 3 || password.length < 12} onClick={submitAdmin}>
+                  {loading ? "Prüfe Zugang..." : "Als Admin anmelden"}
+                </Button>
               </div>
             )}
 

@@ -172,12 +172,19 @@ def read_staff_users(db: Session = Depends(get_db), user=Depends(require_admin))
 
 @app.get("/staff-users/cashier-list", response_model=list[StaffUserSummary])
 def read_cashier_list(db: Session = Depends(get_db)):
-    return _list_staff_users(db, role="cashier")
-
-
-@app.get("/staff-users/admin-list", response_model=list[StaffUserSummary])
-def read_admin_list(db: Session = Depends(get_db)):
-    return _list_staff_users(db, role="admin")
+    return [
+        StaffUserSummary(
+            id=row.id,
+            username="",
+            display_name=row.display_name,
+            role=row.role,
+            avatar_image=row.avatar_image or "",
+        )
+        for row in db.query(StaffUser)
+        .filter(StaffUser.is_active == True, StaffUser.role == "cashier")  # noqa: E712
+        .order_by(StaffUser.display_name.asc())
+        .all()
+    ]
 
 
 @app.post("/staff-users", response_model=StaffUserSummary, status_code=201)

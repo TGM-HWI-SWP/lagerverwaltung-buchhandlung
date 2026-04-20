@@ -24,7 +24,11 @@ def _to_login_response(user: StaffUser) -> LoginResponse:
 def admin_login(db: Session, req: AdminLoginRequest) -> LoginResponse:
     user = (
         db.query(StaffUser)
-        .filter(StaffUser.id == req.user_id.strip(), StaffUser.role == "admin", StaffUser.is_active == True)  # noqa: E712
+        .filter(
+            StaffUser.username == req.username.strip().lower(),
+            StaffUser.role == "admin",
+            StaffUser.is_active == True,
+        )  # noqa: E712
         .first()
     )
     if not user or not user.password_hash or not verify_password(req.password, user.password_hash):
