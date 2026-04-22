@@ -90,3 +90,12 @@ Für den aktuellen Produktstand wäre mittelfristig sinnvoll:
 ---
 
 **Letzte Aktualisierung:** 2026-04-19
+
+GUI- Tests im ganzen Projekt, letzte Aktualisierung: 22.04.2026
+Im Rahmen der Entwicklung der grafischen Benutzeroberfläche (GUI) wurden verschiedene Tests durchgeführt, um die Funktionalität und Benutzerfreundlichkeit sicherzustellen. Die Tests erfolgten hauptsächlich manuell, da der Fokus auf der korrekten Interaktion zwischen GUI und Businesslogik lag.
+
+Zunächst wurden alle interaktiven Elemente der GUI überprüft. Dazu zählen insbesondere Buttons, Eingabefelder sowie Navigationsmöglichkeiten innerhalb der Anwendung. Es wurde getestet, ob Benutzeraktionen wie Klicks oder Eingaben korrekt erkannt und verarbeitet werden. Dabei zeigte sich, dass alle Buttons die vorgesehenen Funktionen auslösen und die Navigation zwischen den einzelnen Ansichten fehlerfrei funktioniert.
+
+Ein weiterer wichtiger Bestandteil der Tests war die Überprüfung der Anbindung an die Businesslogik. Hierbei wurde kontrolliert, ob Aktionen in der GUI die entsprechenden Funktionen im Programmcode aufrufen. Beispielsweise wurde beim Auslösen bestimmter Aktionen überprüft, ob Daten korrekt verarbeitet, gespeichert oder verändert werden. Diese Tests verliefen erfolgreich, sodass eine korrekte Kommunikation zwischen GUI und Logik gewährleistet ist.
+
+Zusätzlich wurden verschiedene Randfälle getestet, um die Stabilität der Anwendung zu erhöhen. Dazu gehören unter anderem leere oder fehlerhafte Eingaben sowie ungültige Benutzeraktionen. In diesen Fällen reagiert die Anwendung erwartungsgemäß, beispielsweise durch Fehlermeldungen oder das Verhindern ungültiger Aktionen.
