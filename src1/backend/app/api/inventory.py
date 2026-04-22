@@ -1,34 +1,26 @@
 from sqlalchemy.orm import Session
 
-from app.adapters.sqlalchemy_repositories import SqlAlchemyBookRepository, SqlAlchemyMovementRepository
-from app.db.models import Movement
+from app.adapters.schema_mappers import movement_from_schema
+from app.api.deps import inventory_service
 from app.db.schemas import MovementSchema
-from app.services.inventory import InventoryService
+from app.domain import models as dm
 
 
-def _service(db: Session) -> InventoryService:
-    return InventoryService(
-        db=db,
-        books=SqlAlchemyBookRepository(db),
-        movements=SqlAlchemyMovementRepository(db),
-    )
+def get_all_movements(db: Session) -> list[dm.Movement]:
+    return inventory_service(db).list_movements()
 
 
-def get_all_movements(db: Session) -> list[Movement]:
-    return _service(db).list_movements()
+def get_movement(db: Session, movement_id: str) -> dm.Movement | None:
+    return inventory_service(db).get_movement(movement_id)
 
 
-def get_movement(db: Session, movement_id: str) -> Movement | None:
-    return _service(db).get_movement(movement_id)
+def create_movement(db: Session, movement: MovementSchema) -> dm.Movement:
+    return inventory_service(db).create_movement(movement_from_schema(movement))
 
 
-def create_movement(db: Session, movement: MovementSchema) -> Movement:
-    return _service(db).create_movement(movement)
-
-
-def update_movement(db: Session, movement_id: str, movement: MovementSchema) -> Movement | None:
-    return _service(db).update_movement(movement_id, movement)
+def update_movement(db: Session, movement_id: str, movement: MovementSchema) -> dm.Movement | None:
+    return inventory_service(db).update_movement(movement_id, movement_from_schema(movement))
 
 
 def delete_movement(db: Session, movement_id: str) -> bool:
-    return _service(db).delete_movement(movement_id)
+    return inventory_service(db).delete_movement(movement_id)
