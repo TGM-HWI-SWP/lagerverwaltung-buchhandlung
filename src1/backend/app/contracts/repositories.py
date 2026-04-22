@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Protocol
 
-from sqlalchemy.orm import Session
-
-from app.db.models import Book, Movement
-from app.db.schemas import BookSchema, MovementSchema
+from app.domain.models import (
+    Book,
+    BookSupplierLink,
+    IncomingDelivery,
+    Movement,
+    PurchaseOrder,
+    Supplier,
+    SupplierStockEntry,
+)
 
 
 class BookRepository(Protocol):
@@ -14,9 +18,9 @@ class BookRepository(Protocol):
 
     def get(self, book_id: str) -> Book | None: ...
 
-    def create(self, book: BookSchema) -> Book: ...
+    def add(self, book: Book) -> Book: ...
 
-    def update(self, book_id: str, book: BookSchema) -> Book | None: ...
+    def update(self, book: Book) -> Book: ...
 
     def delete(self, book_id: str) -> bool: ...
 
@@ -26,20 +30,67 @@ class MovementRepository(Protocol):
 
     def get(self, movement_id: str) -> Movement | None: ...
 
-    def create(self, movement: MovementSchema) -> Movement: ...
+    def add(self, movement: Movement) -> Movement: ...
 
-    def update(self, movement_id: str, movement: MovementSchema) -> Movement | None: ...
+    def update(self, movement: Movement) -> Movement: ...
 
     def delete(self, movement_id: str) -> bool: ...
 
+    def next_id(self) -> str: ...
 
-@dataclass(frozen=True)
-class Repositories:
-    """
-    Simple container to wire repositories together per request.
-    """
 
-    db: Session
+class SupplierRepository(Protocol):
+    def list(self) -> list[Supplier]: ...
+
+    def get(self, supplier_id: str) -> Supplier | None: ...
+
+    def add(self, supplier: Supplier) -> Supplier: ...
+
+    def next_id(self) -> str: ...
+
+
+class PurchaseOrderRepository(Protocol):
+    def list(self) -> list[PurchaseOrder]: ...
+
+    def get(self, order_id: str) -> PurchaseOrder | None: ...
+
+    def add(self, order: PurchaseOrder) -> PurchaseOrder: ...
+
+    def update(self, order: PurchaseOrder) -> PurchaseOrder: ...
+
+
+class IncomingDeliveryRepository(Protocol):
+    def list(self) -> list[IncomingDelivery]: ...
+
+    def get(self, delivery_id: str) -> IncomingDelivery | None: ...
+
+    def add(self, delivery: IncomingDelivery) -> IncomingDelivery: ...
+
+    def delete(self, delivery_id: str) -> bool: ...
+
+
+class BookSupplierLinkRepository(Protocol):
+    def get_for(self, book_id: str, supplier_id: str) -> BookSupplierLink | None: ...
+
+    def primary_for(self, book_id: str) -> BookSupplierLink | None: ...
+
+    def upsert(self, link: BookSupplierLink) -> BookSupplierLink: ...
+
+    def delete_for_book(self, book_id: str) -> int: ...
+
+    def stock_for_supplier(self, supplier_id: str) -> list[SupplierStockEntry]: ...
+
+
+class UnitOfWork(Protocol):
     books: BookRepository
     movements: MovementRepository
+    suppliers: SupplierRepository
+    purchase_orders: PurchaseOrderRepository
+    incoming_deliveries: IncomingDeliveryRepository
+    book_supplier_links: BookSupplierLinkRepository
 
+    def commit(self) -> None: ...
+
+    def rollback(self) -> None: ...
+
+    def flush(self) -> None: ...

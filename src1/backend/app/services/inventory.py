@@ -1,35 +1,22 @@
 from __future__ import annotations
 
-from sqlalchemy.orm import Session
-
-from app.adapters.sqlalchemy_repositories import next_movement_id
-from app.contracts.repositories import BookRepository, MovementRepository
+from app.contracts.repositories import UnitOfWork
 from app.core.time import utc_now_iso
-from app.db.models import Book, Movement
-from app.db.schemas import MovementSchema
+from app.domain import models as dm
 
 
 class InventoryService:
-    """
-    Handles inventory movements and stock validation.
+    def __init__(self, uow: UnitOfWork):
+        self._uow = uow
 
-    Note: We intentionally keep the stock-change rule here (not in the adapter),
-    so persistence can be swapped without changing business behavior.
-    """
+    def list_movements(self) -> list[dm.Movement]:
+        return self._uow.movements.list()
 
-    def __init__(self, *, db: Session, books: BookRepository, movements: MovementRepository):
-        self._db = db
-        self._books = books
-        self._movements = movements
+    def get_movement(self, movement_id: str) -> dm.Movement | None:
+        return self._uow.movements.get(movement_id)
 
-    def list_movements(self) -> list[Movement]:
-        return self._movements.list()
-
-    def get_movement(self, movement_id: str) -> Movement | None:
-        return self._movements.get(movement_id)
-
-    def create_movement(self, movement: MovementSchema) -> Movement:
-        book = self._books.get(movement.book_id)
+    def create_movement(self, movement: dm.Movement) -> dm.Movement:
+        book = self._uow.books.get(movement.book_id)
         if book is None:
             raise ValueError("Buch für Lagerbewegung nicht gefunden")
 
@@ -37,38 +24,44 @@ class InventoryService:
         quantity_delta = movement.quantity_change
         if movement_type == "OUT":
             quantity_delta = -abs(quantity_delta)
-        elif movement_type in {"IN", "CORRECTION"}:
-            quantity_delta = abs(quantity_delta) if movement_type == "IN" else quantity_delta
-        else:
+        elif movement_type == "IN":
+            quantity_delta = abs(quantity_delta)
+        elif movement_type != "CORRECTION":
             raise ValueError("Ungültiger movement_type. Erlaubt: IN, OUT, CORRECTION")
 
         next_quantity = book.quantity + quantity_delta
         if next_quantity < 0:
             raise ValueError("Bestand kann nicht negativ werden")
 
-        payload = movement.model_dump()
-        payload["id"] = movement.id or next_movement_id(self._db)
-        payload["movement_type"] = movement_type
-        payload["quantity_change"] = quantity_delta
-        payload["timestamp"] = movement.timestamp or utc_now_iso()
-        payload["book_name"] = movement.book_name or book.name
-
-        db_movement = Movement(**payload)
+        now = utc_now_iso()
+        to_persist = dm.Movement(
+            id=movement.id or self._uow.movements.next_id(),
+            book_id=movement.book_id,
+            book_name=movement.book_name or book.name,
+            quantity_change=quantity_delta,
+            movement_type=movement_type,
+            reason=movement.reason,
+            timestamp=movement.timestamp or now,
+            performed_by=movement.performed_by or "system",
+        )
 
         book.quantity = next_quantity
-        book.updated_at = utc_now_iso()
+        book.updated_at = now
+        self._uow.books.update(book)
+        created = self._uow.movements.add(to_persist)
+        self._uow.commit()
+        return created
 
-        # Ensure atomicity for "movement + book quantity change"
-        self._db.add(db_movement)
-        self._db.commit()
-        self._db.refresh(db_movement)
-        return db_movement
-
-    def update_movement(self, movement_id: str, movement: MovementSchema) -> Movement | None:
-        # Keeping current behavior: updates do NOT re-apply stock deltas.
-        # If you want that, we would need a compensating movement model.
-        return self._movements.update(movement_id, movement)
+    def update_movement(self, movement_id: str, movement: dm.Movement) -> dm.Movement | None:
+        if self._uow.movements.get(movement_id) is None:
+            return None
+        movement.id = movement_id
+        updated = self._uow.movements.update(movement)
+        self._uow.commit()
+        return updated
 
     def delete_movement(self, movement_id: str) -> bool:
-        # Keeping current behavior: delete does NOT re-apply stock deltas.
-        return self._movements.delete(movement_id)
+        deleted = self._uow.movements.delete(movement_id)
+        if deleted:
+            self._uow.commit()
+        return deleted

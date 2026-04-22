@@ -123,28 +123,13 @@ Persönliches Changelog für Kaufmann, Rolle: GUI-Designer
 
 ## Zusammenfassung
 
-**Gesamt implementierte Features:** Komplette GUI und was dazu gehört, keine Ahnung wie viele ich genau gemacht hab
-**Gesamt geschriebene Tests:** 1 Kompletten habe vergessen die immer hinzuzufügen  
-**Gesamt Commits:** 22 
-**Größte Herausforderung:** Modularisierung von den TSX files
-**Schönste Code-Zeile:** 
-const revenueData = useMemo(() => {
-    const monthlyRevenue: { [key: string]: number } = {};
-    salesLog
-      .filter((entry) => entry.type === "Verkauf")
-      .forEach((entry) => {
-        const date = new Date(entry.createdAt);
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        monthlyRevenue[monthKey] = (monthlyRevenue[monthKey] || 0) + entry.total;
-      });
-    return Object.entries(monthlyRevenue)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, revenue]) => ({ month, revenue }));
-  }, [salesLog]);
-
-Die Umsatzanzeige war erfüllend
+**Gesamt implementierte Features:** [Anzahl]  
+**Gesamt geschriebene Tests:** [Anzahl]  
+**Gesamt Commits:** [Anzahl]  
+**Größte Herausforderung:** [Beschreibung]  
+**Schönste Code-Zeile:** [Code-Snippet]
 
 ---
 
-**Changelog erstellt von:** Tristan Kaufmann  
-**Letzte Aktualisierung:** 22.04.2026
+**Changelog erstellt von:** [Name]  
+**Letzte Aktualisierung:** [Datum]

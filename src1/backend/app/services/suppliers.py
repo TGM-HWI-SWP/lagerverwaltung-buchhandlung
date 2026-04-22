@@ -2,106 +2,85 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from sqlalchemy.orm import Session
-
-from app.adapters.sqlalchemy_repositories import next_movement_id, sync_book_supplier_link
+from app.contracts.repositories import UnitOfWork
 from app.core.time import utc_now_iso
-from app.db.models import Book, BookSupplier, IncomingDelivery, Movement, PurchaseOrder, Supplier
-from app.db.schemas import PurchaseOrderSchema, SupplierOrderRequest, SupplierSchema
+from app.domain import models as dm
 
 
 class SupplierService:
-    def __init__(self, db: Session):
-        self._db = db
+    def __init__(self, uow: UnitOfWork):
+        self._uow = uow
 
-    def list_suppliers(self) -> list[Supplier]:
-        return self._db.query(Supplier).order_by(Supplier.name.asc()).all()
+    def list_suppliers(self) -> list[dm.Supplier]:
+        return self._uow.suppliers.list()
 
-    def get_supplier(self, supplier_id: str) -> Supplier | None:
-        return self._db.query(Supplier).filter(Supplier.id == supplier_id).first()
+    def get_supplier(self, supplier_id: str) -> dm.Supplier | None:
+        return self._uow.suppliers.get(supplier_id)
 
-    def create_supplier(self, supplier_data: SupplierSchema) -> Supplier:
-        ids = self._db.query(Supplier.id).all()
-        max_num = 0
-        for (supplier_id,) in ids:
-            if supplier_id and supplier_id.startswith("S") and supplier_id[1:].isdigit():
-                max_num = max(max_num, int(supplier_id[1:]))
+    def create_supplier(self, supplier: dm.Supplier) -> dm.Supplier:
+        if not supplier.id:
+            supplier.id = self._uow.suppliers.next_id()
+        if not supplier.created_at:
+            supplier.created_at = utc_now_iso()
+        created = self._uow.suppliers.add(supplier)
+        self._uow.commit()
+        return created
 
-        supplier = Supplier(
-            id=supplier_data.id or f"S{max_num + 1:03d}",
-            name=supplier_data.name,
-            contact=supplier_data.contact,
-            address=supplier_data.address,
-            notes=supplier_data.notes,
-            created_at=supplier_data.created_at or utc_now_iso(),
-        )
-        self._db.add(supplier)
-        self._db.commit()
-        self._db.refresh(supplier)
-        return supplier
+    def list_purchase_orders(self) -> list[dm.PurchaseOrder]:
+        return self._uow.purchase_orders.list()
 
-    def list_purchase_orders(self) -> list[PurchaseOrder]:
-        return self._db.query(PurchaseOrder).order_by(PurchaseOrder.created_at.desc()).all()
-
-    def create_purchase_order(self, order_data: PurchaseOrderSchema) -> PurchaseOrder:
-        supplier = self._db.query(Supplier).filter(Supplier.id == order_data.supplier_id).first()
+    def create_purchase_order(self, order: dm.PurchaseOrder) -> dm.PurchaseOrder:
+        supplier = self._uow.suppliers.get(order.supplier_id)
         if supplier is None:
             raise ValueError("Lieferant nicht gefunden")
 
-        book = self._db.query(Book).filter(Book.id == order_data.book_id).first()
+        book = self._uow.books.get(order.book_id)
         if book is None:
             raise ValueError("Buch nicht gefunden")
 
-        existing_link = (
-            self._db.query(BookSupplier)
-            .filter(BookSupplier.book_id == book.id, BookSupplier.supplier_id == supplier.id)
-            .first()
-        )
-        if existing_link is None:
-            sync_book_supplier_link(
-                self._db,
+        if self._uow.book_supplier_links.get_for(book.id, supplier.id) is None:
+            self._sync_link(
                 book_id=book.id,
                 supplier_id=supplier.id,
-                purchase_price=book.purchase_price,
-                supplier_sku=book.sku or "",
+                purchase_price=float(book.purchase_price),
+                supplier_sku=book.sku,
             )
 
-        status = order_data.status
-        if order_data.delivered_quantity == order_data.quantity:
+        status = order.status
+        if order.delivered_quantity == order.quantity:
             status = "geliefert"
-        elif order_data.delivered_quantity > 0 and status == "offen":
+        elif order.delivered_quantity > 0 and status == "offen":
             status = "teilgeliefert"
 
-        order = PurchaseOrder(
-            id=order_data.id or f"PO-{uuid4().hex[:12].upper()}",
+        to_persist = dm.PurchaseOrder(
+            id=order.id,
             supplier_id=supplier.id,
-            supplier_name=order_data.supplier_name or supplier.name,
+            supplier_name=order.supplier_name or supplier.name,
             book_id=book.id,
-            book_name=order_data.book_name or book.name,
-            book_sku=order_data.book_sku or (book.sku or ""),
-            unit_price=order_data.unit_price,
-            quantity=order_data.quantity,
-            delivered_quantity=order_data.delivered_quantity,
+            book_name=order.book_name or book.name,
+            book_sku=order.book_sku or book.sku,
+            unit_price=order.unit_price,
+            quantity=order.quantity,
+            delivered_quantity=order.delivered_quantity,
             status=status,
-            created_at=order_data.created_at or utc_now_iso(),
-            delivered_at=order_data.delivered_at,
+            created_at=order.created_at or utc_now_iso(),
+            delivered_at=order.delivered_at,
         )
-        self._db.add(order)
-        self._db.commit()
-        self._db.refresh(order)
-        return order
+        created = self._uow.purchase_orders.add(to_persist)
+        self._uow.commit()
+        return created
 
-    def receive_purchase_order(self, order_id: str, quantity: int) -> IncomingDelivery:
-        order = self._db.query(PurchaseOrder).filter(PurchaseOrder.id == order_id).first()
+    def receive_purchase_order(self, order_id: str, quantity: int) -> dm.IncomingDelivery:
+        order = self._uow.purchase_orders.get(order_id)
         if order is None:
             raise ValueError("Bestellung nicht gefunden")
 
-        remaining_quantity = int(order.quantity) - int(order.delivered_quantity)
-        if quantity > remaining_quantity:
+        remaining = order.quantity - order.delivered_quantity
+        if quantity > remaining:
             raise ValueError("Liefermenge ist größer als die offene Restmenge")
 
         now = utc_now_iso()
-        delivery = IncomingDelivery(
+        delivery = dm.IncomingDelivery(
             id=f"IN-{uuid4().hex[:12].upper()}",
             order_id=order.id,
             supplier_id=order.supplier_id,
@@ -112,129 +91,149 @@ class SupplierService:
             unit_price=float(order.unit_price),
             received_at=now,
         )
-        self._db.add(delivery)
+        created = self._uow.incoming_deliveries.add(delivery)
 
-        next_delivered = int(order.delivered_quantity) + quantity
-        order.delivered_quantity = next_delivered
-        order.status = "geliefert" if next_delivered >= int(order.quantity) else "teilgeliefert"
+        order.delivered_quantity = order.delivered_quantity + quantity
+        order.status = "geliefert" if order.delivered_quantity >= order.quantity else "teilgeliefert"
         order.delivered_at = now
+        self._uow.purchase_orders.update(order)
 
-        self._db.commit()
-        self._db.refresh(delivery)
-        return delivery
+        self._uow.commit()
+        return created
 
-    def list_incoming_deliveries(self) -> list[IncomingDelivery]:
-        return self._db.query(IncomingDelivery).order_by(IncomingDelivery.received_at.desc()).all()
+    def list_incoming_deliveries(self) -> list[dm.IncomingDelivery]:
+        return self._uow.incoming_deliveries.list()
 
     def book_incoming_delivery(
         self,
         delivery_id: str,
         performed_by: str = "system",
-    ) -> Movement:
-        delivery = self._db.query(IncomingDelivery).filter(IncomingDelivery.id == delivery_id).first()
+    ) -> dm.Movement:
+        delivery = self._uow.incoming_deliveries.get(delivery_id)
         if delivery is None:
             raise ValueError("Wareneingang nicht gefunden")
 
-        supplier = self._db.query(Supplier).filter(Supplier.id == delivery.supplier_id).first()
+        supplier = self._uow.suppliers.get(delivery.supplier_id)
         if supplier is None:
             raise ValueError("Lieferant nicht gefunden")
 
-        book = self._db.query(Book).filter(Book.id == delivery.book_id).first()
+        book = self._uow.books.get(delivery.book_id)
         if book is None:
             raise ValueError("Buch nicht gefunden")
 
         now = utc_now_iso()
-        book.quantity = int(book.quantity) + int(delivery.quantity)
+        book.quantity = book.quantity + delivery.quantity
         book.purchase_price = float(delivery.unit_price)
         book.supplier_id = delivery.supplier_id
         book.updated_at = now
-        sync_book_supplier_link(
-            self._db,
+        self._uow.books.update(book)
+        self._sync_link(
             book_id=book.id,
             supplier_id=delivery.supplier_id,
             purchase_price=float(delivery.unit_price),
-            supplier_sku=book.sku or "",
+            supplier_sku=book.sku,
         )
 
-        movement = Movement(
-            id=next_movement_id(self._db),
+        movement = dm.Movement(
+            id=self._uow.movements.next_id(),
             book_id=book.id,
             book_name=book.name,
-            quantity_change=int(delivery.quantity),
+            quantity_change=delivery.quantity,
             movement_type="IN",
             reason=f"Bestellung von {supplier.name}",
             timestamp=now,
             performed_by=performed_by,
         )
-        self._db.add(movement)
-        self._db.delete(delivery)
-        self._db.commit()
-        self._db.refresh(movement)
-        return movement
+        created = self._uow.movements.add(movement)
+        self._uow.incoming_deliveries.delete(delivery.id)
 
-    def get_supplier_stock(self, supplier_id: str) -> list[dict]:
-        books = (
-            self._db.query(Book, BookSupplier)
-            .join(BookSupplier, BookSupplier.book_id == Book.id)
-            .filter(BookSupplier.supplier_id == supplier_id)
-            .order_by(Book.name.asc())
-            .all()
-        )
-        return [
-            {
-                "book_id": book.id,
-                "book_name": book.name,
-                "quantity": int(book.quantity),
-                "price": float(link.last_purchase_price or book.purchase_price),
-            }
-            for book, link in books
-        ]
+        self._uow.commit()
+        return created
+
+    def get_supplier_stock(self, supplier_id: str) -> list[dm.SupplierStockEntry]:
+        return self._uow.book_supplier_links.stock_for_supplier(supplier_id)
 
     def order_from_supplier(
         self,
         supplier_id: str,
-        order_data: SupplierOrderRequest,
-    ) -> Movement:
-        supplier = self._db.query(Supplier).filter(Supplier.id == supplier_id).first()
+        book_id: str,
+        quantity: int,
+        performed_by: str = "system",
+    ) -> dm.Movement:
+        supplier = self._uow.suppliers.get(supplier_id)
         if supplier is None:
             raise ValueError("Lieferant nicht gefunden")
 
-        book = self._db.query(Book).filter(Book.id == order_data.book_id).first()
+        book = self._uow.books.get(book_id)
         if book is None:
             raise ValueError("Buch nicht gefunden")
 
-        link = (
-            self._db.query(BookSupplier)
-            .filter(BookSupplier.book_id == order_data.book_id, BookSupplier.supplier_id == supplier_id)
-            .first()
-        )
+        link = self._uow.book_supplier_links.get_for(book_id, supplier_id)
         if link is None:
             raise ValueError("Buch ist bei diesem Lieferanten nicht gelistet")
 
         now = utc_now_iso()
-        book.quantity = int(book.quantity) + order_data.quantity
+        book.quantity = book.quantity + quantity
         book.updated_at = now
         book.supplier_id = supplier_id
+        self._uow.books.update(book)
 
-        sync_book_supplier_link(
-            self._db,
+        self._sync_link(
             book_id=book.id,
             supplier_id=supplier_id,
             purchase_price=float(link.last_purchase_price or book.purchase_price),
-            supplier_sku=book.sku or "",
+            supplier_sku=book.sku,
         )
 
-        movement = Movement(
-            id=next_movement_id(self._db),
+        movement = dm.Movement(
+            id=self._uow.movements.next_id(),
             book_id=book.id,
             book_name=book.name,
-            quantity_change=order_data.quantity,
+            quantity_change=quantity,
             movement_type="IN",
             reason=f"Bestellung von {supplier.name}",
             timestamp=now,
-            performed_by=order_data.performed_by,
+            performed_by=performed_by,
         )
-        self._db.add(movement)
-        self._db.commit()
-        self._db.refresh(movement)
-        return movement
+        created = self._uow.movements.add(movement)
+        self._uow.commit()
+        return created
+
+    def _sync_link(
+        self,
+        *,
+        book_id: str,
+        supplier_id: str,
+        purchase_price: float,
+        supplier_sku: str,
+    ) -> None:
+        supplier_id = (supplier_id or "").strip()
+        if not supplier_id:
+            return
+        now = utc_now_iso()
+        existing = self._uow.book_supplier_links.get_for(book_id, supplier_id)
+        price = float(purchase_price or 0)
+        if existing is None:
+            primary = self._uow.book_supplier_links.primary_for(book_id)
+            link = dm.BookSupplierLink(
+                id=str(uuid4()),
+                book_id=book_id,
+                supplier_id=supplier_id,
+                supplier_sku=supplier_sku or "",
+                is_primary=primary is None,
+                last_purchase_price=price,
+                created_at=now,
+                updated_at=now,
+            )
+        else:
+            link = dm.BookSupplierLink(
+                id=existing.id,
+                book_id=existing.book_id,
+                supplier_id=existing.supplier_id,
+                supplier_sku=supplier_sku or existing.supplier_sku or "",
+                is_primary=existing.is_primary,
+                last_purchase_price=price,
+                created_at=existing.created_at,
+                updated_at=now,
+            )
+        self._uow.book_supplier_links.upsert(link)
