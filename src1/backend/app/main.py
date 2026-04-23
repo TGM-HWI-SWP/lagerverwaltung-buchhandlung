@@ -295,9 +295,12 @@ def update_movement(movement_id: str, movement: MovementSchema, db: Session = De
 
 @app.delete("/movements/{movement_id}")                                         # Bewegung löschen
 def delete_movement(movement_id: str, db: Session = Depends(get_db)):
-    if not inventory.delete_movement(db, movement_id):                          # Nicht gefunden
-        raise HTTPException(status_code=404, detail="Bewegung nicht gefunden")
-    return {"detail": "Bewegung gelöscht"}
+    try:
+        if not inventory.delete_movement(db, movement_id):                      # Nicht gefunden
+            raise HTTPException(status_code=404, detail="Bewegung nicht gefunden")
+        return {"detail": "Bewegung gelöscht"}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 # ── Inventory ──────────────────────────────────────────

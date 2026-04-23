@@ -10,13 +10,14 @@ Diese Tests gehören zum aktuellen `src1`-Produktstand.
 
 ## Aktueller Stand
 
-Derzeit existiert ein produktiver Backend-Test:
+Derzeit existieren zwei produktive Backend-Tests:
 
 - `src1/backend/tests/test_sqlite_schema.py`
+- `src1/backend/tests/test_ports_adapters_flow.py`
 
-Dieser Test ist bewusst mit `unittest` geschrieben und läuft ohne zusätzliche Test-Abhängigkeiten.
+Beide Tests sind bewusst mit `unittest` geschrieben.
 
-## Was der aktuelle Test prüft
+## Was die aktuellen Tests prüfen
 
 Der Schematest prüft unter anderem:
 
@@ -26,19 +27,28 @@ Der Schematest prüft unter anderem:
 - Mehrfach-Lieferanten über `book_suppliers`
 - wichtige Constraints, z. B. bei Preisen und eindeutigen Buch-Lieferanten-Zuordnungen
 
+Der Flow-Test prüft unter anderem:
+
+- Book-CRUD über Services/Repositories
+- Lagerbewegungen mit Bestandsanpassung
+- Schutz vor Negativbestand
+- Purchase-Order -> Incoming-Delivery -> Booking Ablauf
+- gesperrte Direktbestellung `order_from_supplier(...)`
+- gesperrtes nachträgliches Ändern/Löschen von Bewegungen
+
 ## Tests ausführen
 
 ### Empfohlener Weg vom Repo-Root
 
 ```bash
-python -m unittest -q src1.backend.tests.test_sqlite_schema
+python -m unittest -q src1.backend.tests.test_sqlite_schema src1.backend.tests.test_ports_adapters_flow
 ```
 
 ### Aus dem Backend-Ordner
 
 ```bash
 cd src1/backend
-python -m unittest -q tests.test_sqlite_schema
+python -m unittest -q tests.test_sqlite_schema tests.test_ports_adapters_flow
 ```
 
 ## Optionale Test-Tools
@@ -52,16 +62,7 @@ Das heißt:
 
 ## Empfohlene nächste Teststufen
 
-### 1. Service-Tests
-
-Sinnvoll für:
-
-- `InventoryService`
-- Bewegungsregeln
-- Negativbestand verhindern
-- `IN` / `OUT` / `CORRECTION`
-
-### 2. API-Tests
+### 1. API-Tests
 
 Sinnvoll für:
 
@@ -70,7 +71,7 @@ Sinnvoll für:
 - `POST /purchase-orders`
 - `POST /incoming-deliveries/{delivery_id}/book`
 
-### 3. Persistenztests
+### 2. Persistenztests
 
 Sinnvoll für:
 
@@ -80,7 +81,7 @@ Sinnvoll für:
 
 ## Test-Zielbild
 
-Für den aktuellen Produktstand wäre mittelfristig sinnvoll:
+Für den aktuellen Produktstand wäre als nächster Ausbau sinnvoll:
 
 - Schematests
 - Service-Tests

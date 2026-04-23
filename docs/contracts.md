@@ -21,8 +21,8 @@ CRUD-Zugriffe auf Bücher (Persistenz-agnostisch).
 
 - `list() -> list[Book]`
 - `get(book_id: str) -> Book | None`
-- `create(book: BookSchema) -> Book`
-- `update(book_id: str, book: BookSchema) -> Book | None`
+- `add(book: Book) -> Book`
+- `update(book: Book) -> Book`
 - `delete(book_id: str) -> bool`
 
 ### Referenz-Implementierung
@@ -41,16 +41,60 @@ Persistenz von Lagerbewegungen (Movements).
 
 - `list() -> list[Movement]`
 - `get(movement_id: str) -> Movement | None`
-- `create(movement: MovementSchema) -> Movement`
-- `update(movement_id: str, movement: MovementSchema) -> Movement | None`
+- `add(movement: Movement) -> Movement`
+- `update(movement: Movement) -> Movement`
 - `delete(movement_id: str) -> bool`
+- `next_id() -> str`
 
 ### Referenz-Implementierung
 - `SqlAlchemyMovementRepository` (`app/adapters/sqlalchemy_repositories.py`)
 
 ---
 
-## 3. Services (Use-Case Contracts)
+## 3. Weitere Persistenz-Ports
+
+### SupplierRepository
+
+- `list() -> list[Supplier]`
+- `get(supplier_id: str) -> Supplier | None`
+- `add(supplier: Supplier) -> Supplier`
+- `next_id() -> str`
+
+### PurchaseOrderRepository
+
+- `list() -> list[PurchaseOrder]`
+- `get(order_id: str) -> PurchaseOrder | None`
+- `add(order: PurchaseOrder) -> PurchaseOrder`
+- `update(order: PurchaseOrder) -> PurchaseOrder`
+
+### IncomingDeliveryRepository
+
+- `list() -> list[IncomingDelivery]`
+- `get(delivery_id: str) -> IncomingDelivery | None`
+- `add(delivery: IncomingDelivery) -> IncomingDelivery`
+- `delete(delivery_id: str) -> bool`
+
+### BookSupplierLinkRepository
+
+- `get_for(book_id: str, supplier_id: str) -> BookSupplierLink | None`
+- `primary_for(book_id: str) -> BookSupplierLink | None`
+- `upsert(link: BookSupplierLink) -> BookSupplierLink`
+- `delete_for_book(book_id: str) -> int`
+- `stock_for_supplier(supplier_id: str) -> list[SupplierStockEntry]`
+
+### UnitOfWork
+
+- stellt `books`, `movements`, `suppliers`, `purchase_orders`, `incoming_deliveries`, `book_supplier_links` bereit
+- `commit() -> None`
+- `rollback() -> None`
+- `flush() -> None`
+
+Referenz-Implementierung:
+- `SqlAlchemyUnitOfWork` (`app/adapters/sqlalchemy_repositories.py`)
+
+---
+
+## 4. Services (Use-Case Contracts)
 
 Services sind keine “Ports” im strengen Sinn, aber die **stabile API** innerhalb des Backends.
 
@@ -64,6 +108,10 @@ Services sind keine “Ports” im strengen Sinn, aber die **stabile API** inner
 - `update_book(book_id, book)`
 - `delete_book(book_id)`
 
+Wichtig:
+- synchronisiert `books.supplier_id` mit `book_suppliers`
+- verwendet Domain-Modelle statt direkt Pydantic-Schemas
+
 ### InventoryService
 
 **Ort:** `app/services/inventory.py`
@@ -76,8 +124,9 @@ Services sind keine “Ports” im strengen Sinn, aber die **stabile API** inner
 - Bestand darf nicht negativ werden
 - Beim Anlegen einer Bewegung wird der zugehörige `Book.quantity` atomar angepasst
 
-**Wichtig:** `update_movement` / `delete_movement` passen aktuell den Bestand **nicht** rückwirkend an.
-Wenn das fachlich benötigt ist, wird ein “compensating movements” Ansatz empfohlen.
+**Wichtig:** `update_movement` / `delete_movement` sind vor Release bewusst **gesperrt**.
+Historische Lagerbewegungen dürfen nicht nachträglich verändert oder gelöscht werden.
+Korrekturen sollen über ausgleichende Gegenbewegungen erfolgen.
 
 ### SupplierService
 
@@ -94,9 +143,14 @@ Wenn das fachlich benötigt ist, wird ein “compensating movements” Ansatz em
 - `get_supplier_stock(supplier_id)`
 - `order_from_supplier(supplier_id, order_data)`
 
+Wichtig:
+- `create_purchase_order` validiert `supplier_id` und `book_id` gegen den aktuellen Bestand
+- `book_incoming_delivery` erhöht Bestand, aktualisiert Einkaufspreis/Lieferant und erzeugt zusätzlich eine `IN`-Bewegung
+- `order_from_supplier(...)` ist vor Release bewusst deaktiviert; verbindlicher Beschaffungsweg ist `purchase_orders -> receive -> incoming_deliveries -> book`
+
 ---
 
-## 4. Datenmodelle (DB + API)
+## 5. Datenmodelle (DB + API)
 
 ### SQLAlchemy Models (DB)
 **Ort:** `src1/backend/app/db/models.py`
@@ -143,6 +197,12 @@ Wenn das fachlich benötigt ist, wird ein “compensating movements” Ansatz em
 ---
 
 ## Versionshistorie der Contracts
+
+### v0.7 (2026-04-23)
+- Doku an tatsächliche Port-Signaturen (`add/update`, `next_id`, `UnitOfWork`) angepasst
+- Supplier-, Purchase-Order-, Incoming-Delivery- und Book-Supplier-Link-Ports ergänzt
+- Hinweise auf Bestands-Synchronisation und direkte Lagerbuchungen ergänzt
+- direkte Lieferanten-Sofortbuchung fachlich deaktiviert und Gegenbewegungs-Regel für Movements dokumentiert
 
 ### v0.2 (2026-04-10)
 - Einführung `app/contracts/*` als Ports

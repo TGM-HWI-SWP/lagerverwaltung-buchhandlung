@@ -53,15 +53,18 @@ class InventoryService:
         return created
 
     def update_movement(self, movement_id: str, movement: dm.Movement) -> dm.Movement | None:
-        if self._uow.movements.get(movement_id) is None:
+        existing = self._uow.movements.get(movement_id)
+        if existing is None:
             return None
-        movement.id = movement_id
-        updated = self._uow.movements.update(movement)
-        self._uow.commit()
-        return updated
+        raise ValueError(
+            "Lagerbewegungen dürfen nicht nachträglich geändert werden. "
+            "Bitte stattdessen eine ausgleichende Gegenbewegung erfassen."
+        )
 
     def delete_movement(self, movement_id: str) -> bool:
-        deleted = self._uow.movements.delete(movement_id)
-        if deleted:
-            self._uow.commit()
-        return deleted
+        if self._uow.movements.get(movement_id) is None:
+            return False
+        raise ValueError(
+            "Lagerbewegungen dürfen nicht gelöscht werden. "
+            "Bitte stattdessen eine ausgleichende Gegenbewegung erfassen."
+        )

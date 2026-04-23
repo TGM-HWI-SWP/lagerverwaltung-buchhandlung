@@ -114,7 +114,7 @@ class MovementSchema(BaseModel):
 class SupplierSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
+    id: str = ""
     name: str
     contact: str = ""
     address: str = ""
@@ -165,6 +165,13 @@ class SupplierOrderRequest(BaseModel):
         if not normalized:
             raise ValueError("Pflichtfeld darf nicht leer sein")
         return normalized
+
+    @field_validator("quantity")
+    @classmethod
+    def validate_supplier_order_quantity(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("quantity muss größer als 0 sein")
+        return value
 
 
 class PurchaseOrderSchema(BaseModel):

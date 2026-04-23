@@ -160,44 +160,10 @@ class SupplierService:
         quantity: int,
         performed_by: str = "system",
     ) -> dm.Movement:
-        supplier = self._uow.suppliers.get(supplier_id)
-        if supplier is None:
-            raise ValueError("Lieferant nicht gefunden")
-
-        book = self._uow.books.get(book_id)
-        if book is None:
-            raise ValueError("Buch nicht gefunden")
-
-        link = self._uow.book_supplier_links.get_for(book_id, supplier_id)
-        if link is None:
-            raise ValueError("Buch ist bei diesem Lieferanten nicht gelistet")
-
-        now = utc_now_iso()
-        book.quantity = book.quantity + quantity
-        book.updated_at = now
-        book.supplier_id = supplier_id
-        self._uow.books.update(book)
-
-        self._sync_link(
-            book_id=book.id,
-            supplier_id=supplier_id,
-            purchase_price=float(link.last_purchase_price or book.purchase_price),
-            supplier_sku=book.sku,
+        raise ValueError(
+            "Direkte Lagerbuchungen über 'order_from_supplier' sind vor Release deaktiviert. "
+            "Bitte den regulären Bestellfluss über /purchase-orders, /receive und /incoming-deliveries/book verwenden."
         )
-
-        movement = dm.Movement(
-            id=self._uow.movements.next_id(),
-            book_id=book.id,
-            book_name=book.name,
-            quantity_change=quantity,
-            movement_type="IN",
-            reason=f"Bestellung von {supplier.name}",
-            timestamp=now,
-            performed_by=performed_by,
-        )
-        created = self._uow.movements.add(movement)
-        self._uow.commit()
-        return created
 
     def _sync_link(
         self,
