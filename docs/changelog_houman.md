@@ -19,7 +19,6 @@ Persönliches Changelog für [Houman], Rolle: [Businesslogic]
 ```
 - d4ec87ca2ce9ce2e29a86d28c409dca47bcc0841 Feat: [db.sql erschaffen]
 - ec3a66c97ca07dbdfd909afec396e363c6934dfd Feat: [neue datenbank angeschafft]
-- f1c5e2ffcd29b8812d88405f016cbef99bbbe708 Docs: [changelog_houman updated]
 - 12aafe047993a0082bb2cdb6f84862c2ea02969b Feat: [crud für inventory.py und books.py]
 ```
 
@@ -53,7 +52,7 @@ Persönliches Changelog für [Houman], Rolle: [Businesslogic]
 ### Implementiert
 - supplier tabelle und lager des suppliers
 - supplier stock bestellen und dass es ins movement tabelle geschrieben wird
-- main update mit inventory und reports und supplie
+- main update mit inventory und reports und supplier
 
 ### Tests geschrieben
 - 
@@ -71,69 +70,50 @@ Persönliches Changelog für [Houman], Rolle: [Businesslogic]
 
 ---
 
-## [v0.4] - [Datum]
+## [v1.0] - [23.04.2026]
 
 ### Implementiert
-- [Feature/Fix]
+- [Port&Adapter Prinzip updated]
 
 ### Tests geschrieben
 - [Tests]
 
 ### Commits
 ```
-- [Commits]
+- []
 ```
 
 ### Mergekonflikt(e)
 - [Konflikte]
 
----
 
-## [v0.5] - [Datum]
-
-### Implementiert
-- [Feature/Fix]
-
-### Tests geschrieben
-- [Tests]
-
-### Commits
-```
-- [Commits]
-```
-
-### Mergekonflikt(e)
-- [Konflikte]
-
----
-
-## [v1.0] - [Datum]
-
-### Implementiert
-- [Feature/Fix]
-
-### Tests geschrieben
-- [Tests]
-
-### Commits
-```
-- [Commits]
-```
-
-### Mergekonflikt(e)
-- [Konflikte]
-
----
 
 ## Zusammenfassung
 
-**Gesamt implementierte Features:** [Anzahl]  
-**Gesamt geschriebene Tests:** [Anzahl]  
-**Gesamt Commits:** [Anzahl]  
-**Größte Herausforderung:** [Beschreibung]  
-**Schönste Code-Zeile:** [Code-Snippet]
+**Gesamt implementierte Features:** [8]  
+**Gesamt geschriebene Tests:** [2]  
+**Gesamt Commits:** [41]  
+**Größte Herausforderung:** [Nach port & adapter Prinzip alles coden ]  
+**Schönste Code-Zeile:** [
+
+class UnitOfWork(Protocol):
+    books: BookRepository
+    movements: MovementRepository
+    suppliers: SupplierRepository
+    purchase_orders: PurchaseOrderRepository
+    incoming_deliveries: IncomingDeliveryRepository
+    book_supplier_links: BookSupplierLinkRepository
+
+    def commit(self) -> None: ...
+
+    def rollback(self) -> None: ...
+
+    def flush(self) -> None: ...
+
+Weil es alle Methoden der anderen Klassen in eine Klasse zusammenfasst, und die dann genutzt werden
+]
 
 ---
 
-**Changelog erstellt von:** [Name]  
-**Letzte Aktualisierung:** [Datum]
+**Changelog erstellt von:** [David Houman]  
+**Letzte Aktualisierung:** [23.4.2026]
