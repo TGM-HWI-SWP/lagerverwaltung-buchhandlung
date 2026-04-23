@@ -3,14 +3,19 @@ from __future__ import annotations
 from app.db import models as orm
 from app.domain import models as dm
 
+# Uebersetzer zwischen ORM-Row (DB-Kante) und Domain-Dataclass (Kern).
+# Richtung: *_to_domain() liest ORM -> baut Domain, *_apply() schreibt Domain-Werte in eine ORM-Row.
+# Nullable-Felder werden zu sinnvollen Defaults normalisiert (None -> "" oder 0).
+
 
 def book_to_domain(row: orm.Book) -> dm.Book:
+    """ORM-Row -> Domain-Buch. Normalisiert None-Werte zu "" bzw. 0."""
     return dm.Book(
         id=row.id,
         name=row.name,
         author=row.author or "",
         description=row.description,
-        purchase_price=float(row.purchase_price or 0),
+        purchase_price=float(row.purchase_price or 0),                          # Numeric -> float (Decimal waere genauer, aber Domain nutzt float)
         sell_price=float(row.sell_price or 0),
         quantity=int(row.quantity or 0),
         sku=row.sku or "",
@@ -23,6 +28,7 @@ def book_to_domain(row: orm.Book) -> dm.Book:
 
 
 def book_apply(row: orm.Book, book: dm.Book) -> None:
+    """Schreibt Domain-Werte IN eine bestehende ORM-Row (fuer UPDATE - ohne neue Row anzulegen)."""
     row.name = book.name
     row.author = book.author
     row.description = book.description
@@ -38,6 +44,7 @@ def book_apply(row: orm.Book, book: dm.Book) -> None:
 
 
 def movement_to_domain(row: orm.Movement) -> dm.Movement:
+    """ORM-Row -> Domain-Bewegung."""
     return dm.Movement(
         id=row.id,
         book_id=row.book_id,
@@ -51,6 +58,7 @@ def movement_to_domain(row: orm.Movement) -> dm.Movement:
 
 
 def movement_apply(row: orm.Movement, movement: dm.Movement) -> None:
+    """Schreibt Domain-Werte in eine bestehende Movement-Row."""
     row.book_id = movement.book_id
     row.book_name = movement.book_name
     row.quantity_change = movement.quantity_change
@@ -61,6 +69,7 @@ def movement_apply(row: orm.Movement, movement: dm.Movement) -> None:
 
 
 def supplier_to_domain(row: orm.Supplier) -> dm.Supplier:
+    """ORM-Row -> Domain-Lieferant."""
     return dm.Supplier(
         id=row.id,
         name=row.name,
@@ -72,6 +81,7 @@ def supplier_to_domain(row: orm.Supplier) -> dm.Supplier:
 
 
 def purchase_order_to_domain(row: orm.PurchaseOrder) -> dm.PurchaseOrder:
+    """ORM-Row -> Domain-Bestellung."""
     return dm.PurchaseOrder(
         id=row.id,
         supplier_id=row.supplier_id,
@@ -89,6 +99,7 @@ def purchase_order_to_domain(row: orm.PurchaseOrder) -> dm.PurchaseOrder:
 
 
 def purchase_order_apply(row: orm.PurchaseOrder, order: dm.PurchaseOrder) -> None:
+    """Schreibt Domain-Werte in eine bestehende PurchaseOrder-Row."""
     row.supplier_id = order.supplier_id
     row.supplier_name = order.supplier_name
     row.book_id = order.book_id
@@ -103,6 +114,7 @@ def purchase_order_apply(row: orm.PurchaseOrder, order: dm.PurchaseOrder) -> Non
 
 
 def incoming_delivery_to_domain(row: orm.IncomingDelivery) -> dm.IncomingDelivery:
+    """ORM-Row -> Domain-Wareneingang."""
     return dm.IncomingDelivery(
         id=row.id,
         order_id=row.order_id,
@@ -117,6 +129,7 @@ def incoming_delivery_to_domain(row: orm.IncomingDelivery) -> dm.IncomingDeliver
 
 
 def book_supplier_link_to_domain(row: orm.BookSupplier) -> dm.BookSupplierLink:
+    """ORM-Row -> Domain-Link (Buch <-> Lieferant)."""
     return dm.BookSupplierLink(
         id=row.id,
         book_id=row.book_id,

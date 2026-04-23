@@ -18,13 +18,20 @@ from app.contracts.repositories import (
 from app.db import models as orm
 from app.domain import models as dm
 
+# Konkrete SQLAlchemy-Implementierungen der Repository-Protokolle aus contracts/.
+# Diese Schicht ist der einzige Ort, der SQL/ORM kennt - Services sehen nur die abstrakten Ports.
+# flush() in add()/update() erzwingt SQL jetzt (fuer z.B. DB-generierte Defaults),
+# committen tut aber nur der UnitOfWork am Ende des Use-Case.
+
 
 class SqlAlchemyBookRepository(BookRepository):
+    """SQLAlchemy-Adapter fuer BookRepository - CRUD inkl. kaskadiertem Loeschen der Supplier-Links."""
+
     def __init__(self, db: Session):
         self._db = db
 
     def list(self) -> list[dm.Book]:
-        rows = self._db.query(orm.Book).order_by(orm.Book.name.asc()).all()
+        rows = self._db.query(orm.Book).order_by(orm.Book.name.asc()).all()     # alphabetisch fuer stabile UI
         return [mappers.book_to_domain(row) for row in rows]
 
     def get(self, book_id: str) -> dm.Book | None:
@@ -47,15 +54,15 @@ class SqlAlchemyBookRepository(BookRepository):
             updated_at=book.updated_at,
             notes=book.notes,
         )
-        self._db.add(row)
-        self._db.flush()
+        self._db.add(row)                                                       # Row im Session-Cache anmelden...
+        self._db.flush()                                                        # ...und INSERT sofort absetzen (ohne commit)
         return mappers.book_to_domain(row)
 
     def update(self, book: dm.Book) -> dm.Book:
         row = self._db.query(orm.Book).filter(orm.Book.id == book.id).first()
         if row is None:
-            raise LookupError(f"Book {book.id} not found")
-        mappers.book_apply(row, book)
+            raise LookupError(f"Book {book.id} not found")                      # sollte nie passieren - Service prueft vorher
+        mappers.book_apply(row, book)                                           # Werte in die bestehende Row schreiben (ORM trackt dirty)
         self._db.flush()
         return mappers.book_to_domain(row)
 
@@ -64,14 +71,14 @@ class SqlAlchemyBookRepository(BookRepository):
         if row is None:
             return False
         try:
-            (
+            (                                                                   # Kaskade von Hand: BookSupplier-Links zuerst weg...
                 self._db.query(orm.BookSupplier)
                 .filter(orm.BookSupplier.book_id == book_id)
-                .delete(synchronize_session=False)
+                .delete(synchronize_session=False)                              # synchronize_session=False: schneller, nur erlaubt da wir gleich committen
             )
-            self._db.delete(row)
+            self._db.delete(row)                                                # ...dann das Buch selbst
             self._db.flush()
-        except IntegrityError as exc:
+        except IntegrityError as exc:                                           # verbleibende FKs (Movements/Orders/Deliveries) blocken das Loeschen
             self._db.rollback()
             raise ValueError(
                 "Das Buch kann nicht gelöscht werden, weil noch Bewegungen, Bestellungen oder Wareneingänge damit verknüpft sind."
@@ -80,11 +87,13 @@ class SqlAlchemyBookRepository(BookRepository):
 
 
 class SqlAlchemyMovementRepository(MovementRepository):
+    """SQLAlchemy-Adapter fuer MovementRepository - Bewegungen sind append-only (siehe Service-Regel)."""
+
     def __init__(self, db: Session):
         self._db = db
 
     def list(self) -> list[dm.Movement]:
-        rows = self._db.query(orm.Movement).order_by(orm.Movement.timestamp.desc()).all()
+        rows = self._db.query(orm.Movement).order_by(orm.Movement.timestamp.desc()).all()  # neueste zuerst fuer Historie-UI
         return [mappers.movement_to_domain(row) for row in rows]
 
     def get(self, movement_id: str) -> dm.Movement | None:
@@ -123,18 +132,21 @@ class SqlAlchemyMovementRepository(MovementRepository):
         return True
 
     def next_id(self) -> str:
-        ids = self._db.query(orm.Movement.id).all()
+        """Sucht die hoechste M<Zahl>-ID und gibt die naechste zurueck, z.B. M007 -> M008."""
+        ids = self._db.query(orm.Movement.id).all()                             # holt ALLE IDs - bei grossen Tabellen ineffizient; fuer unser Volumen OK
         max_num = 0
         for (mid,) in ids:
-            match = re.fullmatch(r"M(\d+)", mid or "")
+            match = re.fullmatch(r"M(\d+)", mid or "")                          # ignoriert evtl. nicht-konforme IDs (z.B. Altdaten)
             if match:
                 num = int(match.group(1))
                 if num > max_num:
                     max_num = num
-        return f"M{max_num + 1:03d}"
+        return f"M{max_num + 1:03d}"                                            # :03d -> "001", "012", "123" (ab 1000 laenger - OK)
 
 
 class SqlAlchemySupplierRepository(SupplierRepository):
+    """SQLAlchemy-Adapter fuer SupplierRepository."""
+
     def __init__(self, db: Session):
         self._db = db
 
@@ -160,22 +172,25 @@ class SqlAlchemySupplierRepository(SupplierRepository):
         return mappers.supplier_to_domain(row)
 
     def next_id(self) -> str:
+        """Analog zu Movement.next_id(), aber mit Prefix S (S001, S002, ...)."""
         ids = self._db.query(orm.Supplier.id).all()
         max_num = 0
         for (supplier_id,) in ids:
-            if supplier_id and supplier_id.startswith("S") and supplier_id[1:].isdigit():
+            if supplier_id and supplier_id.startswith("S") and supplier_id[1:].isdigit():  # simpler Parser statt Regex
                 max_num = max(max_num, int(supplier_id[1:]))
         return f"S{max_num + 1:03d}"
 
 
 class SqlAlchemyPurchaseOrderRepository(PurchaseOrderRepository):
+    """SQLAlchemy-Adapter fuer PurchaseOrderRepository."""
+
     def __init__(self, db: Session):
         self._db = db
 
     def list(self) -> list[dm.PurchaseOrder]:
         rows = (
             self._db.query(orm.PurchaseOrder)
-            .order_by(orm.PurchaseOrder.created_at.desc())
+            .order_by(orm.PurchaseOrder.created_at.desc())                      # neueste Bestellung zuerst
             .all()
         )
         return [mappers.purchase_order_to_domain(row) for row in rows]
@@ -213,13 +228,15 @@ class SqlAlchemyPurchaseOrderRepository(PurchaseOrderRepository):
 
 
 class SqlAlchemyIncomingDeliveryRepository(IncomingDeliveryRepository):
+    """SQLAlchemy-Adapter fuer IncomingDeliveryRepository - Eintraege leben nur bis zur Verbuchung."""
+
     def __init__(self, db: Session):
         self._db = db
 
     def list(self) -> list[dm.IncomingDelivery]:
         rows = (
             self._db.query(orm.IncomingDelivery)
-            .order_by(orm.IncomingDelivery.received_at.desc())
+            .order_by(orm.IncomingDelivery.received_at.desc())                  # zuletzt gemeldet zuerst
             .all()
         )
         return [mappers.incoming_delivery_to_domain(row) for row in rows]
@@ -262,6 +279,8 @@ class SqlAlchemyIncomingDeliveryRepository(IncomingDeliveryRepository):
 
 
 class SqlAlchemyBookSupplierLinkRepository(BookSupplierLinkRepository):
+    """SQLAlchemy-Adapter fuer BookSupplierLinkRepository - N:M-Link Buch <-> Lieferant."""
+
     def __init__(self, db: Session):
         self._db = db
 
@@ -288,16 +307,17 @@ class SqlAlchemyBookSupplierLinkRepository(BookSupplierLinkRepository):
         return mappers.book_supplier_link_to_domain(row) if row else None
 
     def upsert(self, link: dm.BookSupplierLink) -> dm.BookSupplierLink:
+        """INSERT wenn neu, sonst UPDATE der wechselhaften Felder - id/created_at/is_primary bleiben."""
         row = (
             self._db.query(orm.BookSupplier)
-            .filter(
+            .filter(                                                            # anhand (book_id, supplier_id), nicht per PK
                 orm.BookSupplier.book_id == link.book_id,
                 orm.BookSupplier.supplier_id == link.supplier_id,
             )
             .first()
         )
         if row is None:
-            row = orm.BookSupplier(
+            row = orm.BookSupplier(                                             # neuer Link
                 id=link.id,
                 book_id=link.book_id,
                 supplier_id=link.supplier_id,
@@ -308,7 +328,7 @@ class SqlAlchemyBookSupplierLinkRepository(BookSupplierLinkRepository):
                 updated_at=link.updated_at,
             )
             self._db.add(row)
-        else:
+        else:                                                                   # bestehenden Link updaten - NICHT id/book_id/supplier_id/created_at anfassen
             row.supplier_sku = link.supplier_sku
             row.is_primary = link.is_primary
             row.last_purchase_price = link.last_purchase_price
@@ -317,15 +337,17 @@ class SqlAlchemyBookSupplierLinkRepository(BookSupplierLinkRepository):
         return mappers.book_supplier_link_to_domain(row)
 
     def delete_for_book(self, book_id: str) -> int:
+        """Loescht alle Links eines Buchs - Bulk-Delete ohne Einzel-Objekt-Tracking."""
         return (
             self._db.query(orm.BookSupplier)
             .filter(orm.BookSupplier.book_id == book_id)
-            .delete(synchronize_session=False)
+            .delete(synchronize_session=False)                                  # schneller als Row-weise, aber Session-Cache wird nicht aktualisiert
         )
 
     def stock_for_supplier(self, supplier_id: str) -> list[dm.SupplierStockEntry]:
+        """Liefert alle Buecher dieses Lieferanten mit aktuellem Bestand und zuletzt gezahltem Preis."""
         rows = (
-            self._db.query(orm.Book, orm.BookSupplier)
+            self._db.query(orm.Book, orm.BookSupplier)                          # Tupel-Query: beide Tabellen zusammen
             .join(orm.BookSupplier, orm.BookSupplier.book_id == orm.Book.id)
             .filter(orm.BookSupplier.supplier_id == supplier_id)
             .order_by(orm.Book.name.asc())
@@ -336,15 +358,18 @@ class SqlAlchemyBookSupplierLinkRepository(BookSupplierLinkRepository):
                 book_id=book.id,
                 book_name=book.name,
                 quantity=int(book.quantity),
-                price=float(link.last_purchase_price or book.purchase_price),
+                price=float(link.last_purchase_price or book.purchase_price),   # Link-Preis bevorzugt, Buch-Preis als Fallback
             )
             for book, link in rows
         ]
 
 
 class SqlAlchemyUnitOfWork(UnitOfWork):
+    """Buendelt alle Repositories auf derselben Session, damit ein Use-Case eine einzige Transaktion hat."""
+
     def __init__(self, db: Session):
         self._db = db
+        # Alle Repos teilen SICH die gleiche Session -> commit() auf UoW committet alles gemeinsam.
         self.books: BookRepository = SqlAlchemyBookRepository(db)
         self.movements: MovementRepository = SqlAlchemyMovementRepository(db)
         self.suppliers: SupplierRepository = SqlAlchemySupplierRepository(db)
@@ -353,10 +378,10 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         self.book_supplier_links: BookSupplierLinkRepository = SqlAlchemyBookSupplierLinkRepository(db)
 
     def commit(self) -> None:
-        self._db.commit()
+        self._db.commit()                                                       # persistiert alles seit dem letzten commit/rollback
 
     def rollback(self) -> None:
-        self._db.rollback()
+        self._db.rollback()                                                     # verwirft alle noch offenen Aenderungen
 
     def flush(self) -> None:
-        self._db.flush()
+        self._db.flush()                                                        # schickt SQL jetzt - ohne zu committen (fuer Zwischenergebnisse)

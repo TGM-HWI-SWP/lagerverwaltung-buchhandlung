@@ -6,6 +6,8 @@ from app.domain import models as dm
 
 
 class InventoryService:
+    """Use-Cases fuer Lagerbewegungen: aktualisiert Bestand und protokolliert IN/OUT/CORRECTION."""
+
     def __init__(self, uow: UnitOfWork):
         self._uow = uow
 
@@ -16,55 +18,58 @@ class InventoryService:
         return self._uow.movements.get(movement_id)
 
     def create_movement(self, movement: dm.Movement) -> dm.Movement:
+        """Legt eine Bewegung an und passt den Buch-Bestand entsprechend an (atomar)."""
         book = self._uow.books.get(movement.book_id)
         if book is None:
             raise ValueError("Buch für Lagerbewegung nicht gefunden")
 
-        movement_type = movement.movement_type.upper()
+        movement_type = movement.movement_type.upper()                          # robust gegen "in"/"In"/"IN"
         quantity_delta = movement.quantity_change
         if movement_type == "OUT":
-            quantity_delta = -abs(quantity_delta)
+            quantity_delta = -abs(quantity_delta)                               # OUT ist IMMER negativ, egal welches Vorzeichen der Client schickt
         elif movement_type == "IN":
-            quantity_delta = abs(quantity_delta)
-        elif movement_type != "CORRECTION":
+            quantity_delta = abs(quantity_delta)                                # IN ist IMMER positiv
+        elif movement_type != "CORRECTION":                                     # CORRECTION darf + oder - sein (manuelle Anpassung)
             raise ValueError("Ungültiger movement_type. Erlaubt: IN, OUT, CORRECTION")
 
         next_quantity = book.quantity + quantity_delta
-        if next_quantity < 0:
+        if next_quantity < 0:                                                   # negativer Bestand nicht erlaubt
             raise ValueError("Bestand kann nicht negativ werden")
 
         now = utc_now_iso()
         to_persist = dm.Movement(
-            id=movement.id or self._uow.movements.next_id(),
+            id=movement.id or self._uow.movements.next_id(),                    # Client-ID erlauben, sonst M001/M002/...
             book_id=movement.book_id,
-            book_name=movement.book_name or book.name,
+            book_name=movement.book_name or book.name,                          # Name aus Buch uebernehmen falls nicht mitgeschickt
             quantity_change=quantity_delta,
             movement_type=movement_type,
             reason=movement.reason,
             timestamp=movement.timestamp or now,
-            performed_by=movement.performed_by or "system",
+            performed_by=movement.performed_by or "system",                     # Fallback "system", wenn kein User-Kontext
         )
 
         book.quantity = next_quantity
         book.updated_at = now
-        self._uow.books.update(book)
+        self._uow.books.update(book)                                            # Buch-Update und Bewegungs-Insert gehen zusammen...
         created = self._uow.movements.add(to_persist)
-        self._uow.commit()
+        self._uow.commit()                                                      # ...in einer Transaktion, sonst drohen Inkonsistenzen
         return created
 
     def update_movement(self, movement_id: str, movement: dm.Movement) -> dm.Movement | None:
+        """Bewusst gesperrt: Historie bleibt unveraenderlich -> stattdessen Gegenbewegung erfassen."""
         existing = self._uow.movements.get(movement_id)
         if existing is None:
-            return None
-        raise ValueError(
+            return None                                                         # -> 404 im Controller
+        raise ValueError(                                                       # Audit-Regel: Bewegungen sind append-only
             "Lagerbewegungen dürfen nicht nachträglich geändert werden. "
             "Bitte stattdessen eine ausgleichende Gegenbewegung erfassen."
         )
 
     def delete_movement(self, movement_id: str) -> bool:
+        """Bewusst gesperrt: Loeschen wuerde Historie verfaelschen -> Gegenbewegung stattdessen."""
         if self._uow.movements.get(movement_id) is None:
-            return False
-        raise ValueError(
+            return False                                                        # -> 404 im Controller
+        raise ValueError(                                                       # Audit-Regel: Bewegungen sind append-only
             "Lagerbewegungen dürfen nicht gelöscht werden. "
             "Bitte stattdessen eine ausgleichende Gegenbewegung erfassen."
         )
