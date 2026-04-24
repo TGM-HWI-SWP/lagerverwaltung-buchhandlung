@@ -182,31 +182,27 @@ Das Seed-SQL liegt in:
 
 ## Tests
 
-Der neue Backend-Schematest läuft ohne zusätzliche Test-Tools mit `unittest`.
+Die Backend-Tests laufen mit `unittest` — keine Extra-Installation nötig.
 
-Vom Repo-Root:
-
-```bash
-python -m unittest -q src1.backend.tests.test_sqlite_schema
-```
-
-Oder aus dem Backend-Ordner:
+Im laufenden Docker-Container:
 
 ```bash
-cd src1/backend
-python -m unittest -q tests.test_sqlite_schema
+docker compose exec backend python -m unittest -q tests.test_sqlite_schema tests.test_ports_adapters_flow
 ```
 
-Der Test prüft unter anderem:
-
-- frisches Erzeugen des SQLite-Schemas
-- Seed-Daten
-- `book_suppliers` für Mehrfach-Lieferanten
-- wichtige Constraints
 
 Weitere Hinweise:
 
 - [docs/tests.md](/home/smooth/code-projects/lagerverwaltung-buchhandlung/docs/tests.md)
+
+Die Tests prüfen unter anderem:
+- frisches Erzeugen des SQLite-Schemas und der Seed-Daten
+- `book_suppliers` für Mehrfach-Lieferanten und wichtige Constraints
+- Book-CRUD, Lagerbewegungen mit Bestandsanpassung, Negativbestand-Schutz
+- Purchase-Order → Incoming-Delivery → Booking
+- gesperrte Pfade (`order_from_supplier`, Movement-Update/Delete)
+
+Weitere Hinweise: [docs/tests.md](docs/tests.md)
 
 ## Entwicklungshinweise
 
