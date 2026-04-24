@@ -178,6 +178,103 @@ class PortsAdaptersFlowTest(unittest.TestCase):
             stock = sup_svc.get_supplier_stock("S001")
             self.assertEqual([e.book_id for e in stock], ["B030"])
 
+    def test_direct_supplier_order_is_disabled_in_favor_of_purchase_order_flow(self) -> None:
+        with self.Session() as session:
+            books_svc, _, sup_svc = self._services(session)
+
+            sup_svc.create_supplier(
+                supplier_from_schema(
+                    SupplierSchema(id="S001", name="Lieferant A")
+                )
+            )
+            books_svc.create_book(
+                book_from_schema(
+                    BookSchema(
+                        id="B040",
+                        name="Buch 40",
+                        description="d",
+                        purchase_price=4.0,
+                        sell_price=6.0,
+                        quantity=5,
+                        supplier_id="S001",
+                    )
+                )
+            )
+
+            with self.assertRaises(ValueError):
+                sup_svc.order_from_supplier("S001", "B040", 3)
+
+    def test_update_movement_is_rejected_to_protect_stock_consistency(self) -> None:
+        with self.Session() as session:
+            books_svc, inv_svc, _ = self._services(session)
+
+            books_svc.create_book(
+                book_from_schema(
+                    BookSchema(
+                        id="B050",
+                        name="Buch 50",
+                        description="d",
+                        purchase_price=5.0,
+                        sell_price=7.0,
+                        quantity=10,
+                    )
+                )
+            )
+            created = inv_svc.create_movement(
+                movement_from_schema(
+                    MovementSchema(
+                        book_id="B050",
+                        quantity_change=2,
+                        movement_type="OUT",
+                    )
+                )
+            )
+
+            with self.assertRaises(ValueError):
+                inv_svc.update_movement(
+                    created.id,
+                    movement_from_schema(
+                        MovementSchema(
+                            book_id="B050",
+                            quantity_change=1,
+                            movement_type="OUT",
+                        )
+                    ),
+                )
+
+            self.assertEqual(books_svc.get_book("B050").quantity, 8)
+
+    def test_delete_movement_is_rejected_to_protect_stock_consistency(self) -> None:
+        with self.Session() as session:
+            books_svc, inv_svc, _ = self._services(session)
+
+            books_svc.create_book(
+                book_from_schema(
+                    BookSchema(
+                        id="B060",
+                        name="Buch 60",
+                        description="d",
+                        purchase_price=5.0,
+                        sell_price=7.0,
+                        quantity=10,
+                    )
+                )
+            )
+            created = inv_svc.create_movement(
+                movement_from_schema(
+                    MovementSchema(
+                        book_id="B060",
+                        quantity_change=2,
+                        movement_type="OUT",
+                    )
+                )
+            )
+
+            with self.assertRaises(ValueError):
+                inv_svc.delete_movement(created.id)
+
+            self.assertEqual(books_svc.get_book("B060").quantity, 8)
+
 
 if __name__ == "__main__":
     unittest.main()

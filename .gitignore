@@ -10,6 +10,7 @@ ENV/
 
 node_modules/
 dist/
+*.tsbuildinfo
 
 .env
 .env.*
@@ -40,4 +41,3 @@ htmlcov/
 *.sqlite
 *.sqlite3
 *.db
-

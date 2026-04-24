@@ -11,7 +11,7 @@ from sqlalchemy import inspect, text
 import io                                                                       # PDF-Buffer
 from datetime import datetime                                                   # Zeitstempel im PDF
 import matplotlib                                                               # Plot-Library
-matplotlib.use("Agg")                                                           # Headless-Backend
+matplotlib.use("Agg")                                                           # Non-GUI-Backend - muss VOR `import pyplot`, sonst Crash ohne Display
 import matplotlib.pyplot as plt                                                 # Pyplot-API
 from matplotlib.backends.backend_pdf import PdfPages                            # PDF-Export
 
@@ -33,23 +33,24 @@ from app.db.schemas import (                                                    
 from app.api import books, inventory, suppliers                                 # CRUD-Logik
 
 
-Base.metadata.create_all(bind=engine)                                           # Tabellen erstellen
+Base.metadata.create_all(bind=engine)                                           # Legt fehlende Tabellen an - aendert aber KEINE bestehenden (keine Migration)
 
 
 def _ensure_sqlite_schema():
+    """Hand-gestrickte Mini-Migration fuer alte SQLite-DBs: ruestet Spalten/Tabellen/Indexe nach."""
     if not str(engine.url).startswith("sqlite"):
         return
 
-    with engine.begin() as conn:
+    with engine.begin() as conn:                                                # Transaktion - Rollback bei Exception automatisch
         inspector = inspect(conn)
-        if "books" not in inspector.get_table_names():
+        if "books" not in inspector.get_table_names():                          # Frische DB -> create_all() hat alles, nichts zu migrieren
             return
 
-        book_columns = {col["name"] for col in inspector.get_columns("books")}
+        book_columns = {col["name"] for col in inspector.get_columns("books")}  # (1) Spalte `author` in alten DBs nachruesten
         if "author" not in book_columns:
             conn.execute(text("ALTER TABLE books ADD COLUMN author VARCHAR DEFAULT '' NOT NULL"))
 
-        table_names = set(inspector.get_table_names())
+        table_names = set(inspector.get_table_names())                          # (2) book_suppliers nachruesten - SQL unten ist Duplikat zu db/models.py!
         if "book_suppliers" not in table_names:
             conn.execute(
                 text(
@@ -72,9 +73,9 @@ def _ensure_sqlite_schema():
                 )
             )
 
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_books_supplier_id ON books (supplier_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_books_supplier_id ON books (supplier_id)"))  # (3) Indexe - IF NOT EXISTS verhindert Fehler bei wiederholtem Aufruf
         conn.execute(
-            text("CREATE UNIQUE INDEX IF NOT EXISTS ix_books_sku_non_empty ON books (sku) WHERE sku <> ''")
+            text("CREATE UNIQUE INDEX IF NOT EXISTS ix_books_sku_non_empty ON books (sku) WHERE sku <> ''")  # partieller Unique: SKU eindeutig, leere erlaubt mehrfach
         )
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_movements_book_id ON movements (book_id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_purchase_orders_supplier_id ON purchase_orders (supplier_id)"))
@@ -84,7 +85,7 @@ def _ensure_sqlite_schema():
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_book_suppliers_supplier_id ON book_suppliers (supplier_id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_book_suppliers_book_id ON book_suppliers (book_id)"))
 
-        rows = conn.execute(
+        rows = conn.execute(                                                    # (4) Altdaten-Backfill: alte books.supplier_id -> neue N:M-Tabelle book_suppliers
             text(
                 """
                 SELECT id, supplier_id, sku, purchase_price, created_at, updated_at
@@ -104,7 +105,7 @@ def _ensure_sqlite_schema():
                 ),
                 {"book_id": row.id, "supplier_id": row.supplier_id},
             ).fetchone()
-            if existing:
+            if existing:                                                        # Skip wenn Link schon existiert - sonst Unique-Constraint-Fehler
                 continue
             conn.execute(
                 text(
@@ -132,7 +133,7 @@ def _ensure_sqlite_schema():
 
 
 def _ensure_default_supplier_data():
-    """Stellt sicher, dass ein Standard-Lieferant inkl. Lagerdaten existiert."""
+    """Legt Fallback-Lieferant S001 an, falls er fehlt (datetime('now','localtime') ist SQLite-spezifisch)."""
     supplier_id = "S001"
     supplier_name = "Buchgroßhandel Wien GmbH"
     supplier_contact = "kontakt@bgh-wien.at"
@@ -163,25 +164,25 @@ def _ensure_default_supplier_data():
             )
 
 def _seed_database():
-    """Fügt Testdaten ein, wenn die Datenbank leer ist."""
+    """Fuegt Testdaten aus buchhadlung.sql ein - aber nur, wenn die DB leer ist."""
     sql_file = Path(__file__).parent / "db" / "buchhadlung.sql"
     if not sql_file.exists():
         return
     with engine.connect() as conn:
-        book_count = conn.execute(text("SELECT COUNT(*) FROM books")).scalar()
+        book_count = conn.execute(text("SELECT COUNT(*) FROM books")).scalar()  # nur seeden wenn Tabelle leer, sonst Duplikate bei Neustart
         if book_count and book_count > 0:
             return
         sql = sql_file.read_text(encoding="utf-8")
-        for statement in sql.split(";"):
+        for statement in sql.split(";"):                                        # naives Splitten - bricht, wenn SQL-Strings Semikolons enthalten
             stmt = statement.strip()
             if stmt:
                 conn.execute(text(stmt))
         conn.commit()
 
 
-_ensure_sqlite_schema()
-_seed_database()
-_ensure_default_supplier_data()
+_ensure_sqlite_schema()                                                         # REIHENFOLGE WICHTIG: 1) Schema migrieren (sonst schlagen 2+3 fehl)
+_seed_database()                                                                # 2) Testdaten aus buchhadlung.sql, nur bei leerer DB
+_ensure_default_supplier_data()                                                 # 3) Fallback-Lieferant S001 fuer UI-Dropdowns
 
 app = FastAPI(title=settings.app_name)                                          # App-Instanz
 
@@ -295,9 +296,12 @@ def update_movement(movement_id: str, movement: MovementSchema, db: Session = De
 
 @app.delete("/movements/{movement_id}")                                         # Bewegung löschen
 def delete_movement(movement_id: str, db: Session = Depends(get_db)):
-    if not inventory.delete_movement(db, movement_id):                          # Nicht gefunden
-        raise HTTPException(status_code=404, detail="Bewegung nicht gefunden")
-    return {"detail": "Bewegung gelöscht"}
+    try:
+        if not inventory.delete_movement(db, movement_id):                      # Nicht gefunden
+            raise HTTPException(status_code=404, detail="Bewegung nicht gefunden")
+        return {"detail": "Bewegung gelöscht"}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 # ── Inventory ──────────────────────────────────────────
@@ -306,12 +310,12 @@ def delete_movement(movement_id: str, db: Session = Depends(get_db)):
 @app.get("/inventory")                                                          # Lager-Übersicht
 def inventory_summary(db: Session = Depends(get_db)):
     total_titles = db.query(func.count(Book.id)).scalar() or 0
-    total_units = db.query(func.coalesce(func.sum(Book.quantity), 0)).scalar() or 0
+    total_units = db.query(func.coalesce(func.sum(Book.quantity), 0)).scalar() or 0  # coalesce: SUM() auf leerer Tabelle = NULL -> int(None) waere Crash
     low_stock = db.query(Book).filter(Book.quantity <= 5).order_by(Book.quantity.asc()).all()
     return {
         "total_titles": total_titles,
         "total_units": int(total_units),
-        "low_stock_books": [BookSchema.model_validate(book).model_dump() for book in low_stock],
+        "low_stock_books": [BookSchema.model_validate(book).model_dump() for book in low_stock],  # ORM->Pydantic->dict, weil Route kein response_model hat
     }
 
 
@@ -332,17 +336,17 @@ def inventory_pdf(db: Session = Depends(get_db)):
     labels = [d[0] for d in data]
     sizes = [d[1] for d in data]
 
-    buffer = io.BytesIO()
+    buffer = io.BytesIO()                                                       # In-Memory-Buffer - PDF wird nicht auf Platte geschrieben, direkt gestreamt
     with PdfPages(buffer) as pdf:
-        fig, ax = plt.subplots(figsize=(8.27, 11.69))                           # A4-Hochformat
+        fig, ax = plt.subplots(figsize=(8.27, 11.69))                           # 8.27 x 11.69 Zoll = 210 x 297 mm = A4 Hochformat
         ax.pie(sizes, labels=labels, autopct="%1.1f%%", startangle=90)
-        ax.axis("equal")
+        ax.axis("equal")                                                        # gleiches Seitenverhaeltnis, sonst wird der Kreis zum Oval
         timestamp = datetime.now().strftime("%d.%m.%Y %H:%M")
         fig.suptitle(f"Lagerbestand nach Kategorien\nStand: {timestamp}", fontsize=14)
         pdf.savefig(fig)
-        plt.close(fig)
+        plt.close(fig)                                                          # WICHTIG gegen Memory-Leak - matplotlib haelt Figures sonst im RAM
 
-    buffer.seek(0)
+    buffer.seek(0)                                                              # Cursor an Anfang - StreamingResponse liest ab Byte 0
     headers = {"Content-Disposition": 'attachment; filename="lagerbestand.pdf"'}
     return StreamingResponse(buffer, media_type="application/pdf", headers=headers)
 
@@ -416,7 +420,7 @@ def receive_purchase_order(
         return suppliers.receive_purchase_order(db, order_id, payload.quantity)
     except ValueError as exc:
         detail = str(exc)
-        status = 404 if "nicht gefunden" in detail else 400
+        status = 404 if "nicht gefunden" in detail else 400                     # Statuscode per String-Matching - sauberer waeren eigene Exception-Klassen
         raise HTTPException(status_code=status, detail=detail) from exc
 
 
@@ -445,5 +449,5 @@ def book_incoming_delivery(
         return suppliers.book_incoming_delivery(db, delivery_id, payload.performed_by)
     except ValueError as exc:
         detail = str(exc)
-        status = 404 if "nicht gefunden" in detail else 400
+        status = 404 if "nicht gefunden" in detail else 400                     # selbe wie oben - bricht, wenn der Service-Text sich aendert
         raise HTTPException(status_code=status, detail=detail) from exc

@@ -154,15 +154,48 @@ Persönliches Changelog für Kattner, Rolle: Backend/Integration (FastAPI ↔ Re
 
 ---
 
+## [v0.5] - 2026-04-23
+
+### Implementiert
+- Contract-Doku an den tatsächlichen Port-/Unit-of-Work-Stand angepasst:
+  - zusätzliche Persistenz-Ports dokumentiert
+  - reale Signaturen (`add/update`, `next_id`, `UnitOfWork`) nachgezogen
+- Release-nahe Fachregeln im Backend festgezogen:
+  - `update_movement` und `delete_movement` sind jetzt bewusst gesperrt
+  - Korrekturen sollen über Gegenbewegungen statt nachträglicher Historienänderung laufen
+- Beschaffungsfluss fachlich vereinheitlicht:
+  - alter Direktweg `order_from_supplier(...)` im Service deaktiviert
+  - verbindlicher Ablauf ist jetzt `purchase_orders -> receive -> incoming_deliveries -> book`
+- Repo-Hygiene verbessert:
+  - irreführende Altdateien im Root entfernt (`pyproject.toml`, `INDEX.md`, `TEMPLATE_INFO.md`, `src1/README_src1.md`)
+  - `.gitignore` um `*.tsbuildinfo` ergänzt
+- kleine Contract-Verbesserung:
+  - Lieferanten können über das Schema ohne feste ID vom Client angelegt werden
+  - Supplier-Order-Request validiert Mengen jetzt strenger
+
+### Tests geschrieben
+- Service-/Flow-Test für deaktivierten Direktbestellweg ergänzt
+- Service-Tests für gesperrtes `update_movement` und `delete_movement` ergänzt
+
+### Commits
+```
+- (noch nicht committed in diesem Changelog festgehalten)
+```
+
+### Mergekonflikt(e)
+- Keine
+
+---
+
 ## Zusammenfassung
 
-**Gesamt implementierte Features:** Backend-CRUD + DB-Session + SQLite + CORS + Root/Health + Inventory-Summary + Service/Adapter-Struktur + persistente Bestell-/Wareneingangslogik + Mehrfach-Lieferanten im DB-Modell + breiter UI-Ausbau fuer Bestellung/Wareneingang/Verkauf/Lieferanten + stärkere Validierung und sauberere Service-Grenzen  
-**Gesamt geschriebene Tests:** 1 neuer SQLite-Schematest  
-**Gesamt Commits:** 9 erfasst  
+**Gesamt implementierte Features:** Backend-CRUD + DB-Session + SQLite + CORS + Root/Health + Inventory-Summary + Service/Adapter-Struktur + persistente Bestell-/Wareneingangslogik + Mehrfach-Lieferanten im DB-Modell + breiter UI-Ausbau fuer Bestellung/Wareneingang/Verkauf/Lieferanten + stärkere Validierung + festgezogene Release-Regeln fuer Movements/Bestellfluss  
+**Gesamt geschriebene Tests:** SQLite-Schematest plus Service-/Flow-Tests fuer zentrale Backend-Regeln  
+**Gesamt Commits:** 9 erfasst, letzter lokaler Arbeitsstand noch nicht als Commit nachgetragen  
 **Größte Herausforderung:** Datenmodell zwischen Frontend, API und SQLite konsistent weiterentwickeln, ohne den bestehenden `src1`-Flow zu zerbrechen.  
 **Schönste Code-Zeile:** automatische Pflege der Buch-Lieferanten-Zuordnung beim Persistieren statt reiner Einzel-FK-Logik.
 
 ---
 
 **Changelog erstellt von:** Kattner  
-**Letzte Aktualisierung:** 2026-04-19
+**Letzte Aktualisierung:** 2026-04-23

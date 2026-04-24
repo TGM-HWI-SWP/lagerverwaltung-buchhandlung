@@ -19,12 +19,12 @@ Die Anwendung ist für ein Schulprojekt in einem brauchbaren Zustand, hat aber e
 - Lieferanten-, Bestell- und Wareneingangslogik liegt aktuell stark in `src1/backend/app/api/suppliers.py`
 - fachlich wäre eine stärkere Trennung in eigene Service-/API-Module sauberer
 
-### 3. Movements werden beim Update/Löschen nicht fachlich neu verrechnet
+### 3. Bewegungen sind bewusst unveränderlich
 
-- `update_movement` und `delete_movement` passen den Lagerbestand aktuell nicht rückwirkend an
-- das Verhalten ist dokumentiert, aber fachlich limitiert
+- `update_movement` und `delete_movement` sind vor Release absichtlich gesperrt
+- Korrekturen sollen per Gegenbewegung erfolgen, damit Historie und Bestand konsistent bleiben
 
-### 4. Root-Repo enthält noch Legacy-Artefakte
+### 4. Teilweise redundante Root-Dokumentation
 
 - im Root-Bereich liegen noch ältere Template-Dateien und alte Tests
 - sie sind nicht Teil des aktuellen `src1`-Produktkerns
