@@ -34,6 +34,10 @@ def get_all_incoming_deliveries(db: Session) -> list[dm.IncomingDelivery]:
     return supplier_service(db).list_incoming_deliveries()
 
 
+def delete_purchase_order(db: Session, order_id: str) -> None:
+    return supplier_service(db).delete_purchase_order(order_id)
+
+
 def book_incoming_delivery(
     db: Session,
     delivery_id: str,

@@ -101,6 +101,19 @@ class SupplierService:
         self._uow.commit()
         return created
 
+    def delete_purchase_order(self, order_id: str) -> None:
+        order = self._uow.purchase_orders.get(order_id)
+        if order is None:
+            raise ValueError("Bestellung nicht gefunden")
+        if order.delivered_quantity > 0:
+            raise ValueError("Bestellung kann nicht storniert werden, nachdem bereits Liefermengen erfasst wurden")
+
+        deleted = self._uow.purchase_orders.delete(order_id)
+        if not deleted:
+            raise ValueError("Bestellung konnte nicht gelöscht werden")
+
+        self._uow.commit()
+
     def list_incoming_deliveries(self) -> list[dm.IncomingDelivery]:
         return self._uow.incoming_deliveries.list()
 

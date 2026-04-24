@@ -420,6 +420,16 @@ def receive_purchase_order(
         raise HTTPException(status_code=status, detail=detail) from exc
 
 
+@app.delete("/purchase-orders/{order_id}", status_code=204)
+def delete_purchase_order(order_id: str, db: Session = Depends(get_db)):
+    try:
+        suppliers.delete_purchase_order(db, order_id)
+    except ValueError as exc:
+        detail = str(exc)
+        status = 404 if "nicht gefunden" in detail else 400
+        raise HTTPException(status_code=status, detail=detail) from exc
+
+
 @app.get("/incoming-deliveries", response_model=list[IncomingDeliverySchema])
 def read_incoming_deliveries(db: Session = Depends(get_db)):
     return suppliers.get_all_incoming_deliveries(db)

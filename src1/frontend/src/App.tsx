@@ -93,6 +93,13 @@ type Supplier = {
   created_at?: string | null;
 };
 
+type SupplierStockEntry = {
+  book_id: string;
+  book_name: string;
+  quantity: number;
+  price: number;
+};
+
 type BookApi = Book & {
   purchase_price?: number;
   sell_price?: number;
@@ -1166,6 +1173,8 @@ function OrdersPage({
   const [bookError, setBookError] = useState<string | null>(null);
   const [orderError, setOrderError] = useState<string | null>(null);
   const [creatingOrder, setCreatingOrder] = useState(false);
+  const [supplierCatalog, setSupplierCatalog] = useState<SupplierStockEntry[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
   const [receivedDrafts, setReceivedDrafts] = useState<Record<string, string>>({});
   const [bookDraft, setBookDraft] = useState<NewBookDraft>({
     name: "",
@@ -1202,16 +1211,30 @@ function OrdersPage({
     [orders],
   );
 
+  const orderTotal = useMemo(() => {
+    const quantity = Number(draft.quantity);
+    const unitPrice = Number(draft.unitPrice);
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      return 0;
+    }
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+      return 0;
+    }
+    return quantity * unitPrice;
+  }, [draft.quantity, draft.unitPrice]);
+
   useEffect(() => {
-    if (!selectedBook) {
+    if (!draft.supplierId) {
+      setSupplierCatalog([]);
       return;
     }
-    setDraft((prev) => ({
-      ...prev,
-      supplierId: prev.supplierId || selectedBook.supplierId || suppliers[0]?.id || "",
-      unitPrice: prev.unitPrice || String(selectedBook.purchasePrice || 0),
-    }));
-  }, [selectedBook, suppliers]);
+
+    setCatalogLoading(true);
+    apiGet<SupplierStockEntry[]>(`/suppliers/${draft.supplierId}/stock`)
+      .then((data) => setSupplierCatalog(data))
+      .catch(() => setSupplierCatalog([]))
+      .finally(() => setCatalogLoading(false));
+  }, [draft.supplierId]);
 
   const onCreateBook = async () => {
     setBookError(null);
@@ -1271,7 +1294,7 @@ function OrdersPage({
     setCreatingOrder(true);
     try {
       if (!selectedBook) {
-        setOrderError("Bitte ein Buch aus dem Lager auswählen.");
+        setOrderError("Bitte zuerst einen Titel aus dem Lieferantenkatalog auswählen.");
         return;
       }
       const quantity = Number(draft.quantity);
@@ -1284,7 +1307,7 @@ function OrdersPage({
         return;
       }
       if (!Number.isFinite(quantity) || quantity <= 0) {
-        setOrderError("Bitte eine gültige Nachbestellmenge > 0 eingeben.");
+        setOrderError("Bitte eine gültige Bestellmenge > 0 eingeben.");
         return;
       }
       if (!Number.isFinite(unitPrice) || unitPrice < 0) {
@@ -1305,12 +1328,12 @@ function OrdersPage({
       );
 
       setOrders((prev) => [mapPurchaseOrderApiToOrder(createdOrder), ...prev]);
-      setDraft({
+      setDraft((prev) => ({
+        ...prev,
         bookId: "",
-        supplierId: "",
         quantity: "1",
         unitPrice: "",
-      });
+      }));
     } catch (err) {
       setOrderError(err instanceof Error ? err.message : "Unbekannter Fehler");
     } finally {
@@ -1350,67 +1373,64 @@ function OrdersPage({
     }
   };
 
+  const cancelOrder = async (orderId: string) => {
+    setOrderError(null);
+    try {
+      await apiDelete(`/purchase-orders/${orderId}`);
+      setOrders((prev) => prev.filter((order) => order.id !== orderId));
+    } catch (err) {
+      setOrderError(err instanceof Error ? err.message : "Unbekannter Fehler");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card className={card}>
         <CardContent className="space-y-4 p-6">
           <h2 className="text-xl font-semibold">Bestellen</h2>
-          <div className={`grid grid-cols-1 gap-3 rounded-xl border p-4 ${tableBorder} md:grid-cols-2`}>
-            <button
-              type="button"
-              onClick={() => setCreateOpen((v) => !v)}
-              className={`rounded-xl border p-4 text-left transition-colors ${
-                createOpen
-                  ? dark
-                    ? "border-blue-500/70 bg-blue-500/10"
-                    : "border-blue-400 bg-blue-50"
-                  : dark
-                    ? "border-gray-700 bg-gray-950 hover:border-blue-500/50 hover:bg-blue-500/5"
-                    : "border-gray-300 bg-white hover:border-blue-300 hover:bg-blue-50"
-              }`}
-            >
-              <div className="mb-1 text-sm font-semibold">Erstbestellung anlegen</div>
-              <p className={`text-sm ${mutedText}`}>
-                Neue Titel mit erster Bestellung anlegen.
-              </p>
-            </button>
+          <div className={`grid grid-cols-1 gap-3 rounded-xl border p-4 ${tableBorder}`}>
             <div className={`rounded-xl border p-4 ${dark ? "border-gray-700 bg-gray-950" : "border-gray-300 bg-white"}`}>
-              <div className="mb-1 text-sm font-semibold">Nachbestellung anlegen</div>
+              <div className="mb-1 text-sm font-semibold">Bestellung anlegen</div>
               <p className={`mb-3 text-sm ${mutedText}`}>
-                Bestehende Bücher neu bestellen und offen verfolgen.
+                Lieferant auswählen, Titel aus dem Katalog übernehmen und als offene Bestellung anlegen.
               </p>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <select
                   className={formInputClass}
-                  value={draft.bookId}
-                  onChange={(e) =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      bookId: e.target.value,
-                      supplierId: "",
-                      unitPrice: "",
-                    }))
-                  }
-                >
-                  <option value="">Buch aus Lager auswählen</option>
-                  {books
-                    .slice()
-                    .sort((a, b) => (a.quantity - b.quantity) || a.name.localeCompare(b.name))
-                    .map((book) => (
-                      <option key={book.id} value={book.id}>
-                        {book.name} ({book.quantity} Stk.)
-                      </option>
-                    ))}
-                </select>
-                <select
-                  className={formInputClass}
                   value={draft.supplierId}
-                  onChange={(e) => setDraft((prev) => ({ ...prev, supplierId: e.target.value }))}
+                  onChange={(e) =>
+                    setDraft({
+                      bookId: "",
+                      supplierId: e.target.value,
+                      quantity: "1",
+                      unitPrice: "",
+                    })
+                  }
                 >
                   <option value="">Lieferant auswählen</option>
                   {suppliers.map((supplier) => (
                     <option key={supplier.id} value={supplier.id}>
                       {supplier.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className={formInputClass}
+                  value={draft.bookId}
+                  onChange={(e) => {
+                    const selectedEntry = supplierCatalog.find((entry) => entry.book_id === e.target.value);
+                    setDraft((prev) => ({
+                      ...prev,
+                      bookId: e.target.value,
+                      unitPrice: selectedEntry ? String(selectedEntry.price) : prev.unitPrice,
+                    }));
+                  }}
+                  disabled={draft.supplierId === "" || supplierCatalog.length === 0}
+                >
+                  <option value="">Buch aus Lieferantenkatalog auswählen</option>
+                  {supplierCatalog.map((entry) => (
+                    <option key={entry.book_id} value={entry.book_id}>
+                      {entry.book_name}
                     </option>
                   ))}
                 </select>
@@ -1429,19 +1449,30 @@ function OrdersPage({
                   value={draft.unitPrice}
                   onChange={(e) => setDraft((prev) => ({ ...prev, unitPrice: e.target.value }))}
                 />
+                <div className={`rounded-xl border p-4 ${dark ? "border-gray-700 bg-gray-950" : "border-gray-300 bg-gray-50"} md:col-span-2`}>
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <div className="text-sm font-semibold">Bestellsumme</div>
+                      <div className={`text-sm ${mutedText}`}>
+                        {selectedBook ? selectedBook.name : "Noch kein Buch ausgewählt"}
+                      </div>
+                    </div>
+                    <div className="text-2xl font-semibold">{orderTotal.toFixed(2)} EUR</div>
+                  </div>
+                </div>
                 <div className="md:col-span-2">
                   <Button
                     onClick={createReorder}
-                    disabled={creatingOrder || books.length === 0 || suppliers.length === 0}
+                    disabled={creatingOrder || supplierCatalog.length === 0 || suppliers.length === 0}
                   >
-                    {creatingOrder ? "Erfasse Bestellung..." : "Nachbestellung anlegen"}
+                    {creatingOrder ? "Erfasse Bestellung..." : "Bestellung anlegen"}
                   </Button>
                 </div>
               </div>
             </div>
           </div>
 
-          {createOpen && (
+          {false && (
             <div className={`rounded-xl border p-4 ${tableBorder}`}>
               <h3 className="mb-1 text-base font-semibold">Erstbestellung anlegen</h3>
               <p className={`mb-4 text-sm ${mutedText}`}>
@@ -1490,8 +1521,10 @@ function OrdersPage({
                     <th>Buch</th>
                     <th>Bestellt</th>
                     <th>Offen</th>
-                    <th>Preis</th>
+                    <th>Einzelpreis</th>
+                    <th>Gesamt</th>
                     <th>Lieferung</th>
+                    <th>Storno</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1514,6 +1547,7 @@ function OrdersPage({
                         <td>{order.quantity}</td>
                         <td>{remainingQuantity}</td>
                         <td>{order.unitPrice != null ? `${order.unitPrice.toFixed(2)} EUR` : "-"}</td>
+                        <td>{order.unitPrice != null ? `${(order.quantity * order.unitPrice).toFixed(2)} EUR` : "-"}</td>
                         <td className="py-2">
                           <div className="flex items-center gap-2">
                             <input
@@ -1531,6 +1565,16 @@ function OrdersPage({
                               Als angekommen markieren
                             </Button>
                           </div>
+                        </td>
+                        <td className="py-2">
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => cancelOrder(order.id)}
+                            aria-label="Storno"
+                          >
+                            ✕ Storno
+                          </Button>
                         </td>
                       </tr>
                     );

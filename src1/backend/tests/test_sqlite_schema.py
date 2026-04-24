@@ -49,7 +49,7 @@ class SqliteSchemaTest(unittest.TestCase):
             "suppliers": self.conn.execute("SELECT COUNT(*) FROM suppliers").fetchone()[0],
             "book_suppliers": self.conn.execute("SELECT COUNT(*) FROM book_suppliers").fetchone()[0],
         }
-        self.assertEqual(counts, {"books": 10, "movements": 10, "suppliers": 2, "book_suppliers": 13})
+        self.assertEqual(counts, {"books": 12, "movements": 10, "suppliers": 2, "book_suppliers": 15})
 
         second_supplier_link = self.conn.execute(
             """

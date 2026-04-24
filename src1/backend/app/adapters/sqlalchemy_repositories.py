@@ -211,6 +211,10 @@ class SqlAlchemyPurchaseOrderRepository(PurchaseOrderRepository):
         self._db.flush()
         return mappers.purchase_order_to_domain(row)
 
+    def delete(self, order_id: str) -> bool:
+        deleted = self._db.query(orm.PurchaseOrder).filter(orm.PurchaseOrder.id == order_id).delete(synchronize_session=False)
+        return bool(deleted)
+
 
 class SqlAlchemyIncomingDeliveryRepository(IncomingDeliveryRepository):
     def __init__(self, db: Session):

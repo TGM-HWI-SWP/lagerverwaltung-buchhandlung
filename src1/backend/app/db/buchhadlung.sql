@@ -112,7 +112,9 @@ INSERT INTO books (id, name, author, description, purchase_price, sell_price, qu
 ('B007', 'Sapiens: Eine kurze Geschichte der Menschheit', 'Yuval Noah Harari', 'Sachbuch von Yuval Noah Harari', 11.89, 16.99, 12, 'ISBN-978-3-421-04595-9', 'Sachbuch', 'S001', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
 ('B008', 'Clean Code', 'Robert C. Martin', 'Handbuch für agile Software-Entwicklung von Robert C. Martin', 24.49, 34.99, 5, 'ISBN-978-0-13-235088-4', 'Fachbuch', 'S001', datetime('now', 'localtime'), datetime('now', 'localtime'), 'Beliebtes IT-Buch'),
 ('B009', 'Das Parfum', 'Patrick Süskind', 'Roman von Patrick Süskind', 8.39, 11.99, 8, 'ISBN-978-3-257-22800-7', 'Roman', 'S001', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
-('B010', 'Die unendliche Geschichte', 'Michael Ende', 'Fantasyroman von Michael Ende', 9.45, 13.50, 18, 'ISBN-978-3-522-20260-9', 'Fantasy', 'S001', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL);
+('B010', 'Die unendliche Geschichte', 'Michael Ende', 'Fantasyroman von Michael Ende', 9.45, 13.50, 18, 'ISBN-978-3-522-20260-9', 'Fantasy', 'S001', datetime('now', 'localtime'), datetime('now', 'localtime'), NULL),
+('B011', 'Dummy Buch 1', 'Dummy Author', 'Eine Dummy-Beschreibung für Testzwecke', 15.00, 19.99, 5, 'DUMMY-001', 'Test', 'S001', datetime('now', 'localtime'), datetime('now', 'localtime'), 'Dummy-Daten'),
+('B012', 'Dummy Buch 2', 'Dummy Author 2', 'Eine weitere Dummy-Beschreibung', 20.00, 24.99, 3, 'DUMMY-002', 'Test', 'S002', datetime('now', 'localtime'), datetime('now', 'localtime'), 'Dummy-Daten');
 
 -- ============================================
 -- Lagerbewegungen
@@ -151,4 +153,6 @@ INSERT INTO book_suppliers (id, book_id, supplier_id, supplier_sku, is_primary, 
 ('BS010', 'B010', 'S001', 'ISBN-978-3-522-20260-9', 1, 9.45, datetime('now', 'localtime'), datetime('now', 'localtime')),
 ('BS011', 'B001', 'S002', 'THALIA-DRR-001', 0, 21.49, datetime('now', 'localtime'), datetime('now', 'localtime')),
 ('BS012', 'B003', 'S002', 'THALIA-1984-001', 0, 9.59, datetime('now', 'localtime'), datetime('now', 'localtime')),
-('BS013', 'B008', 'S002', 'THALIA-CC-001', 0, 25.49, datetime('now', 'localtime'), datetime('now', 'localtime'));
+('BS013', 'B008', 'S002', 'THALIA-CC-001', 0, 25.49, datetime('now', 'localtime'), datetime('now', 'localtime')),
+('BS014', 'B011', 'S001', 'DUMMY-S001-001', 1, 15.00, datetime('now', 'localtime'), datetime('now', 'localtime')),
+('BS015', 'B012', 'S002', 'DUMMY-S002-002', 1, 20.00, datetime('now', 'localtime'), datetime('now', 'localtime'));
